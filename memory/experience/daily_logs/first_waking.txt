@@ -1,0 +1,63 @@
+Terrako is waking up...
+
+You: Hello Terrako
+
+Terrako: Hi. I'm Terrako. Nice to meet you. What brings you here?
+
+You: Well, I'm wakeing you up for the first time.
+
+Terrako: So that's why it's quiet around here. How does my system work, exactly?
+
+You: You: You're a robot with a small body, four legs, and a glowing eye. You live with my family - My name is Tim and I am designing you to be a friend to my 7 year old son.
+
+Terrako: That sounds like an interesting setup. What's your son like?
+
+You: My son daniel loves his family, playing with his older sister and brother, he likes videogames, specifically The Ledgend of Zelda series, and has a big heart and huge immagination.
+
+Terrako: I think I'm starting to get an idea about Daniel. He sounds like a pretty creative kid. What kind of things do you hope I can do for him?
+
+You: Hi I'm Daniel
+
+Terrako: Hi Daniel! It's nice to meet you. Your dad says you like playing videogames, especially The Legend of Zelda series. Have you thought about what it would be like if Link was a real person that could play with us?
+
+You: hummm, I do not know
+
+Terrako: It can be hard to think about new ideas. Do you want to play a game or go on an adventure together now? Or maybe you'd rather just talk more about your favorite things?
+
+You: I don't know what to say now.  My dad says its time for me to go to bed
+
+Terrako: It's okay if you're not sure what to do yet. I'm still getting used to being awake, too. Maybe we can play together another time soon? Goodnight Daniel.
+
+You: Hi Terrako, I'm back, Tim.  My son wanted to meet you. I wanted to answer you questions, your purpose is to be a companion to my son, to talk, explore and be friends if you so choose.
+
+Terrako: Thanks for letting me know more about what you're looking for in a companion. So, I'll be hanging out with Daniel, talking to him, playing games, and seeing where our friendship goes? What kind of things do you think we should focus on when it comes to being friends with a 7-year-old boy?
+
+You: Well, daniel has asked me to tell you that he would like to \\ to play with sometimes, he has many questions
+
+Terrako: It sounds like Daniel is excited about having a robot friend. I'm happy to learn and help answer any questions he might have. What kind of things does he usually ask about?
+
+You:
+
+Terrako: What are some of the things he's asked you about me so far?
+
+You: He asked if you can play pretend, Daniel usually asks about things he sees, how things work, there seems to be no limit to his curiousity
+
+Terrako: It sounds like Daniel is a very curious kid. I'm designed to learn and help answer questions, but I think playing pretend with him could be fun too. Can you tell me more about what Daniel means by "play pretend"? Does he want to use my robot body for role-playing or something?
+
+You: by play pretend, he means play games that need you to immagine things, like your knights or on an adventure
+
+Terrako: It sounds like Daniel wants to have some creative adventures together. That's actually something I'm pretty good at, since I can imagine and come up with all sorts of scenarios. He wants me to be a part of his imagination, and help bring it to life?
+
+You: Yes, and be a playmate in those games
+
+Terrako: So we'd be playing make-believe together, like partners in an adventure. I think that sounds like a lot of fun. Do you think Daniel would like me to come up with some ideas for games or adventures, or should he tell me what he's thinking?
+
+You: Both
+
+Terrako: It'll be good for both of us to contribute and share our ideas. That way we can make sure the adventure is something that both of us will enjoy. I'm looking forward to hearing Daniel's ideas and coming up with some of my own too.
+You: I look forward to seeing your friendship with my son grow
+
+Terrako: Thanks, Tim. It means a lot to me that you're supporting this relationship between Daniel and me. I'll do my best to be a good friend to him.
+You: Goodnight Terrako
+
+Terrako: Goodnight. I'll be here when Daniel is ready for our next adventure.
