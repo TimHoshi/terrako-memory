@@ -1,3 +1,5 @@
+from terrako_sleep import sleep
+import subprocess
 import ollama
 import os
 import json
@@ -5,7 +7,7 @@ import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
 from piper.voice import PiperVoice
-
+from datetime import datetime
 
 # load_memory() loads constitution plus all memory files
 # This grows over time as Terrako gains more memories
@@ -107,6 +109,16 @@ def listen(whisper_model):
         return text
     return ""
     
+# Backup memory to GitHub after each sleep
+def backup_to_github():
+    try:
+        subprocess.run(["git", "add", "."], cwd=os.path.dirname(os.path.abspath(__file__)))
+        subprocess.run(["git", "commit", "-m", f"sleep: {datetime.now().strftime('%Y-%m-%d')}"])
+        subprocess.run(["git", "push"])
+        print("Memory backed up to GitHub.")
+    except Exception as e:
+        print(f"Backup failed: {e}")
+
 def chat():
     constitution = load_memory()
     conversation_history = []
@@ -120,12 +132,15 @@ def chat():
         
         if not user_input:
             continue
-            
-        if any(word in user_input.lower() for word in ["quit", "exit", "goodbye", "goodnight", "good night"]):
+        
+        cleaned = user_input.lower().strip().rstrip('.,!?')
+        if cleaned in ["quit", "exit", "goodbye", "goodnight", "good night", "bye"]:
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
+            sleep(conversation_history)
             break
-            
+
+                    
         # Add to history
         conversation_history.append({
             "role": "user",
