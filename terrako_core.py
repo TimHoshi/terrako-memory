@@ -105,6 +105,23 @@ def listen(whisper_model):
     text = " ".join([s.text for s in segments]).strip()
     
     if text:
+        # Correct common Terrako mishearings
+        corrections = {
+            "teracle": "Terrako",
+            "tarako": "Terrako",
+            "terrico": "Terrako",
+            "teraco": "Terrako",
+            "torako": "Terrako",
+            "tirico": "Terrako",
+            "terraco": "Terrako",
+            "terrko": "Terrako",
+            "terako": "Terrako",
+            "terroco": "Terrako",
+        }
+        text_lower = text.lower()
+        for wrong, right in corrections.items():
+            text_lower = text_lower.replace(wrong, right)
+        text = text_lower
         print(f"You said: {text}")
         return text
     return ""
