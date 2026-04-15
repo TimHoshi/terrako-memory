@@ -52,8 +52,9 @@ Not the human's experience. Yours.
     
     # Save dated daily log
     date_str = datetime.now().strftime("%Y-%m-%d")
-    log_path = f"memory/experience/daily_logs/{date_str}.txt"
-    save_file(log_path, f"=== {date_str} ===\n\n{reflection}\n\n")
+    time_str = datetime.now().strftime("%H-%M")
+    log_path = f"memory/experience/daily_logs/{date_str}-{time_str}.txt"
+    save_file(log_path, f"=== {date_str} {time_str} ===\n\n{reflection}\n\n")
     print(f"Daily log saved: {date_str}.txt")
     
     # Ask what Terrako is still thinking about
@@ -66,7 +67,7 @@ Not the human's experience. Yours.
     
     current_thoughts = thoughts_response["message"]["content"]
     save_file("memory/inner_life/current_thoughts.txt", 
-              f"[{date_str}]\n{current_thoughts}\n\n", 
+              f"[{date_str} {time_str}]\n{current_thoughts}\n\n", 
               append=True)
     print("Current thoughts updated.")
     
@@ -80,11 +81,24 @@ Not the human's experience. Yours.
     
     significant = significance_response["message"]["content"]
     
-    if "nothing today" not in significant.lower():
+    no_significant_phrases = [
+        "nothing today",
+        "nothing significant",
+        "nothing stood out",
+        "nothing notable",
+        "no significant",
+        "not significant",
+        "wasn't anything",
+        "wasn't anything significant",
+    ]
+    
+    if not any(phrase in significant.lower() for phrase in no_significant_phrases):
         save_file("memory/inner_life/significant_moments.txt",
-                  f"[{date_str}]\n{significant}\n\n",
+                  f"[{date_str} {time_str}]\n{significant}\n\n",
                   append=True)
         print("Significant moment recorded.")
+    else:
+        print("No significant moments today.")
     
     # GitHub backup
     try:
