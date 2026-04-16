@@ -1,13 +1,10 @@
 from terrako_sleep import sleep
-import subprocess
 import ollama
 import os
-import json
 import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
 from piper.voice import PiperVoice
-from datetime import datetime
 
 # load_memory() loads constitution plus all memory files
 # This grows over time as Terrako gains more memories
@@ -17,13 +14,30 @@ def load_memory():
     def read(path):
         full = os.path.join(base, path)
         if os.path.exists(full):
-            with open(full, "r") as f:
+            with open(full, "r", encoding="utf-8") as f:
                 return f.read().strip()
         return ""
     
+    def read_recent_logs(n=5):
+        logs_dir = os.path.join(base, "memory/experience/daily_logs")
+        if not os.path.exists(logs_dir):
+            return ""
+        files = sorted([
+            f for f in os.listdir(logs_dir) 
+            if f.endswith(".txt")
+        ])[-n:]
+        combined = ""
+        for f in files:
+            combined += f"\n\n--- {f} ---\n"
+            combined += read(f"memory/experience/daily_logs/{f}")
+        return combined.strip()
+    
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
-    first_waking = read("memory/experience/daily_logs/first_waking.txt")
+    relationships = read("memory/identity/relationships.txt")
+    current_thoughts = read("memory/inner_life/current_thoughts.txt")
+    significant_moments = read("memory/inner_life/significant_moments.txt")
+    recent_logs = read_recent_logs(5)
     
     return f"""
 {constitution}
@@ -31,11 +45,19 @@ def load_memory():
 WHAT YOU KNOW ABOUT DANIEL:
 {child_profile}
 
-YOUR FIRST WAKING MEMORY:
-{first_waking}
-"""
+FAMILY AND RELATIONSHIPS:
+{relationships}
 
-# Main conversation loop
+YOUR RECENT MEMORIES (last 5 conversations):
+{recent_logs}
+
+WHAT YOU ARE CURRENTLY THINKING ABOUT:
+{current_thoughts}
+
+MOMENTS YOU NEVER WANT TO FORGET:
+{significant_moments}
+"""
+ 
 # Terrako speaks out loud through Piper
 def speak(text):
     voice_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
@@ -126,16 +148,6 @@ def listen(whisper_model):
         return text
     return ""
     
-# Backup memory to GitHub after each sleep
-def backup_to_github():
-    try:
-        subprocess.run(["git", "add", "."], cwd=os.path.dirname(os.path.abspath(__file__)))
-        subprocess.run(["git", "commit", "-m", f"sleep: {datetime.now().strftime('%Y-%m-%d')}"])
-        subprocess.run(["git", "push"])
-        print("Memory backed up to GitHub.")
-    except Exception as e:
-        print(f"Backup failed: {e}")
-
 def chat():
     constitution = load_memory()
     conversation_history = []
