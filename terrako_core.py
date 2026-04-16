@@ -18,7 +18,7 @@ def load_memory():
                 return f.read().strip()
         return ""
     
-    def read_recent_logs(n=5):
+    def read_recent_logs(n=3):
         logs_dir = os.path.join(base, "memory/experience/daily_logs")
         if not os.path.exists(logs_dir):
             return ""
@@ -32,12 +32,20 @@ def load_memory():
             combined += read(f"memory/experience/daily_logs/{f}")
         return combined.strip()
     
+    def read_last_thoughts():
+        path = os.path.join(base, "memory/inner_life/current_thoughts.txt")
+        if not os.path.exists(path):
+            return ""
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        return content[-500:] if len(content) > 500 else content
+    
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
     current_thoughts = read("memory/inner_life/current_thoughts.txt")
     significant_moments = read("memory/inner_life/significant_moments.txt")
-    recent_logs = read_recent_logs(5)
+    recent_logs = read_recent_logs(3)
     
     return f"""
 {constitution}
@@ -48,7 +56,7 @@ WHAT YOU KNOW ABOUT DANIEL:
 FAMILY AND RELATIONSHIPS:
 {relationships}
 
-YOUR RECENT MEMORIES (last 5 conversations):
+YOUR RECENT MEMORIES (last 3 conversations):
 {recent_logs}
 
 WHAT YOU ARE CURRENTLY THINKING ABOUT:
@@ -83,7 +91,7 @@ def listen(whisper_model):
     chunk_duration = 0.5  # seconds per chunk
     chunk_samples = int(sample_rate * chunk_duration)
     max_duration = 15  # maximum seconds to listen
-    silence_threshold = 1.5  # seconds of silence before stopping
+    silence_threshold = 2  # seconds of silence before stopping
     
     audio_chunks = []
     silent_time = 0
@@ -155,6 +163,26 @@ def chat():
     
     print("\nTerrako is waking up...\n")
     
+    # NEW - ask who is there
+    intro = ollama.chat(
+        model="llama3.1:8b",
+        messages=[
+            {"role": "system", "content": constitution},
+            {"role": "user", "content": "You just woke up. Ask simply who you're talking to."}
+        ]
+    )
+    intro_text = intro["message"]["content"]
+    print(f"Terrako: {intro_text}\n")
+    speak(intro_text)
+    
+    # NEW - listen for their name
+    who_is_there = listen(whisper_model)
+    if who_is_there:
+        conversation_history.append({
+            "role": "user",
+            "content": who_is_there
+        })
+    
     while True:
         # Get user input
         user_input = listen(whisper_model)
@@ -168,15 +196,15 @@ def chat():
             speak("Goodnight. I'll think about today.")
             sleep(conversation_history)
             break
-
                     
-        # Add to history
+        # Add to history — THIS STAYS EXACTLY AS IS
         conversation_history.append({
             "role": "user",
             "content": user_input
         })
         
         # Send to ollama
+        print("Terrako is thinking...")
         response = ollama.chat(
             model="llama3.1:8b",
             messages=[
