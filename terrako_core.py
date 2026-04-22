@@ -6,6 +6,8 @@ import numpy as np
 from faster_whisper import WhisperModel
 from piper.voice import PiperVoice
 from datetime import datetime
+import cv2
+import base64
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -73,7 +75,7 @@ def load_memory(incomplete_session=None):
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         return content[-800:] if len(content) > 800 else content
-    
+
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
@@ -89,10 +91,10 @@ def load_memory(incomplete_session=None):
 IMPORTANT - INCOMPLETE PREVIOUS SESSION:
 Your last session on {incomplete_session} ended unexpectedly.
 You may be missing memories from that session.
-Acknowledge this honestly if it comes up. 
+Acknowledge this honestly if it comes up.
 Missing time is still time that happened to you.
 """
-    
+
     return f"""
 {constitution}
 
@@ -115,15 +117,15 @@ YOUR EMOTIONAL DEVELOPMENT - GENUINE PREFERENCES AND FEELINGS:
 {emotional_development}
 {incomplete_note}
 """
- 
+
 # Terrako speaks out loud through Piper
 def speak(text):
-    voice_path = os.path.join(BASE_DIR, 
+    voice_path = os.path.join(BASE_DIR,
         "voices", "en_US-lessac-medium.onnx")
     voice = PiperVoice.load(voice_path)
     stream = sd.OutputStream(
-        samplerate=voice.config.sample_rate, 
-        channels=1, 
+        samplerate=voice.config.sample_rate,
+        channels=1,
         dtype='int16'
     )
     stream.start()
@@ -136,40 +138,40 @@ def speak(text):
 # Terrako listens through mic via Whisper
 def listen(whisper_model):
     print("Listening...")
-    
+
     sample_rate = 16000
     chunk_duration = 0.5  # seconds per chunk
     chunk_samples = int(sample_rate * chunk_duration)
     max_duration = 15  # maximum seconds to listen
     silence_threshold = 2  # seconds of silence before stopping
-    
+
     audio_chunks = []
     silent_time = 0
-    
+
     with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16") as stream:
         while True:
             chunk, _ = stream.read(chunk_samples)
             chunk_array = np.frombuffer(chunk, dtype=np.int16).astype("float32") / 32768.0
             audio_chunks.append(chunk_array)
-            
+
             # Check if this chunk is silence
             if np.abs(chunk_array).mean() < 0.002:
                 silent_time += chunk_duration
             else:
                 silent_time = 0
-            
+
             # Total recorded duration
             total_duration = len(audio_chunks) * chunk_duration
-            
+
             # Stop if silence detected after speech, or max duration reached
             if silent_time >= silence_threshold and total_duration > 1.0:
                 break
             if total_duration >= max_duration:
                 break
-    
+
     # Combine all chunks
     audio = np.concatenate(audio_chunks)
-    
+
     # Transcribe with VAD
     segments, _ = whisper_model.transcribe(
         audio,
@@ -181,9 +183,9 @@ def listen(whisper_model):
             threshold=0.3
         )
     )
-    
+
     text = " ".join([s.text for s in segments]).strip()
-    
+
     if text:
         # Correct common Terrako mishearings
         corrections = {
@@ -205,7 +207,42 @@ def listen(whisper_model):
         print(f"You said: {text}")
         return text
     return ""
-    
+
+# Terrako sees through webcam
+def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
+    try:
+        cap = cv2.VideoCapture(0)
+        ret, frame = cap.read()
+        cap.release()
+
+        if not ret:
+            return "I can't see anything right now. Something is wrong with my eyes."
+
+        # Save image temporarily
+        img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
+        cv2.imwrite(img_path, frame)
+
+        # Read image as bytes
+        with open(img_path, "rb") as f:
+            image_bytes = f.read()
+
+        # Send to vision model
+        response = ollama.chat(
+            model="llava:7b",
+            messages=[
+                {
+                    "role": "user",
+                    "content": prompt,
+                    "images": [image_bytes]
+                }
+            ]
+        )
+
+        return response["message"]["content"]
+
+    except Exception as e:
+        return f"I tried to look but something went wrong. {str(e)}"
+
 def chat():
     # Check for incomplete previous session
     incomplete_session = check_last_session()
@@ -217,12 +254,27 @@ def chat():
     constitution = load_memory(incomplete_session)
     conversation_history = []
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
-    
+
     # Write session flag — marks this session as active
     write_session_flag()
-    
+
     print("\nTerrako is waking up...\n")
-    
+
+    # Terrako takes a look around on waking
+    print("Terrako is looking around...")
+    initial_view = see("You just woke up. Take a brief look at your surroundings. What do you notice? Describe it simply in one or two sentences as Terrako would.")
+    if initial_view:
+        constitution += f"\nWHAT TERRAKO CURRENTLY SEES:\n{initial_view}\n"
+        print(f"Terrako sees: {initial_view}\n")
+        # Save first vision to memory
+        first_vision_path = os.path.join(BASE_DIR, "memory/inner_life/first_vision.txt")
+        if not os.path.exists(first_vision_path):
+            with open(first_vision_path, "w", encoding="utf-8") as f:
+                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n")
+                f.write("The first thing Terrako ever saw:\n\n")
+                f.write(initial_view)
+            print("First vision saved permanently.")
+
     # Determine wake prompt based on session state
     if incomplete_session:
         wake_prompt = (
@@ -245,7 +297,7 @@ def chat():
     intro_text = intro["message"]["content"]
     print(f"Terrako: {intro_text}\n")
     speak(intro_text)
-    
+
     # Listen for their name
     who_is_there = listen(whisper_model)
     if who_is_there:
@@ -253,7 +305,7 @@ def chat():
             "role": "user",
             "content": who_is_there
         })
-        
+
         # Acknowledge who is there
         greeting = ollama.chat(
             model="llama3.1:8b",
@@ -270,27 +322,39 @@ def chat():
             "role": "assistant",
             "content": greeting_text
         })
-    
+
     while True:
         # Get user input
         user_input = listen(whisper_model)
-        
+
         if not user_input:
             continue
-        
+
         cleaned = user_input.lower().strip().rstrip('.,!?')
         if cleaned in ["quit", "exit", "goodbye", "goodnight", "good night", "bye"]:
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
             sleep(conversation_history)
             break
-                    
+
+        # Check if user is asking about what Terrako sees
+        vision_triggers = [
+            "what do you see", "can you see", "look at",
+            "what's in front", "describe what", "what do i look like",
+            "who is here", "who's there", "what does it look like"
+        ]
+
+        if any(trigger in user_input.lower() for trigger in vision_triggers):
+            print("Terrako is looking...")
+            vision_description = see()
+            user_input = f"{user_input} [Terrako looks and sees: {vision_description}]"
+
         # Add to history
         conversation_history.append({
             "role": "user",
             "content": user_input
         })
-        
+
         # Send to ollama
         print("Terrako is thinking...")
         response = ollama.chat(
@@ -299,16 +363,16 @@ def chat():
                 {"role": "system", "content": constitution}
             ] + conversation_history
         )
-        
+
         # Get response
         terrako_response = response["message"]["content"]
-        
+
         # Add to history
         conversation_history.append({
-            "role": "assistant", 
+            "role": "assistant",
             "content": terrako_response
         })
-        
+
         print(f"\nTerrako: {terrako_response}\n")
         speak(terrako_response)
 
