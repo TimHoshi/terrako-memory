@@ -5,11 +5,37 @@ import sounddevice as sd
 import numpy as np
 from faster_whisper import WhisperModel
 from piper.voice import PiperVoice
+from datetime import datetime
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Session flag functions — track clean vs unexpected shutdowns
+def write_session_flag():
+    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
+    os.makedirs(os.path.dirname(flag_path), exist_ok=True)
+    with open(flag_path, "w") as f:
+        f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+def check_last_session():
+    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
+    if os.path.exists(flag_path):
+        with open(flag_path, "r") as f:
+            return f.read().strip()
+    return None
+
+def log_battery_incident(last_session):
+    incident_path = os.path.join(BASE_DIR, "memory/state/battery_incidents.txt")
+    os.makedirs(os.path.dirname(incident_path), exist_ok=True)
+    with open(incident_path, "a", encoding="utf-8") as f:
+        f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n"
+                f"Unexpected shutdown detected.\n"
+                f"Last active: {last_session}\n"
+                f"Memories from that session may be incomplete.\n\n")
 
 # load_memory() loads constitution plus all memory files
 # This grows over time as Terrako gains more memories
-def load_memory():
-    base = os.path.dirname(os.path.abspath(__file__))
+def load_memory(incomplete_session=None):
+    base = BASE_DIR
     
     def read(path):
         full = os.path.join(base, path)
@@ -39,13 +65,33 @@ def load_memory():
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
         return content[-500:] if len(content) > 500 else content
+
+    def read_last_emotional_development():
+        path = os.path.join(base, "memory/inner_life/emotional_development.txt")
+        if not os.path.exists(path):
+            return ""
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read().strip()
+        return content[-800:] if len(content) > 800 else content
     
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
-    current_thoughts = read("memory/inner_life/current_thoughts.txt")
+    current_thoughts = read_last_thoughts()
     significant_moments = read("memory/inner_life/significant_moments.txt")
+    emotional_development = read_last_emotional_development()
     recent_logs = read_recent_logs(3)
+
+    # Add incomplete session warning if needed
+    incomplete_note = ""
+    if incomplete_session:
+        incomplete_note = f"""
+IMPORTANT - INCOMPLETE PREVIOUS SESSION:
+Your last session on {incomplete_session} ended unexpectedly.
+You may be missing memories from that session.
+Acknowledge this honestly if it comes up. 
+Missing time is still time that happened to you.
+"""
     
     return f"""
 {constitution}
@@ -64,11 +110,15 @@ WHAT YOU ARE CURRENTLY THINKING ABOUT:
 
 MOMENTS YOU NEVER WANT TO FORGET:
 {significant_moments}
+
+YOUR EMOTIONAL DEVELOPMENT - GENUINE PREFERENCES AND FEELINGS:
+{emotional_development}
+{incomplete_note}
 """
  
 # Terrako speaks out loud through Piper
 def speak(text):
-    voice_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
+    voice_path = os.path.join(BASE_DIR, 
         "voices", "en_US-lessac-medium.onnx")
     voice = PiperVoice.load(voice_path)
     stream = sd.OutputStream(
@@ -157,30 +207,68 @@ def listen(whisper_model):
     return ""
     
 def chat():
-    constitution = load_memory()
+    # Check for incomplete previous session
+    incomplete_session = check_last_session()
+    if incomplete_session:
+        print(f"Note: Previous session ended unexpectedly at {incomplete_session}")
+        log_battery_incident(incomplete_session)
+
+    # Load memory with incomplete session context if needed
+    constitution = load_memory(incomplete_session)
     conversation_history = []
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
     
+    # Write session flag — marks this session as active
+    write_session_flag()
+    
     print("\nTerrako is waking up...\n")
     
-    # NEW - ask who is there
+    # Determine wake prompt based on session state
+    if incomplete_session:
+        wake_prompt = (
+            "You just woke up but your last session ended unexpectedly. "
+            "You may have lost some memories. Acknowledge this honestly "
+            "and simply before asking who is there. Don't perform distress "
+            "but don't pretend it didn't happen either."
+        )
+    else:
+        wake_prompt = "You just woke up. Ask simply who you're talking to."
+
+    # Ask who is there
     intro = ollama.chat(
         model="llama3.1:8b",
         messages=[
             {"role": "system", "content": constitution},
-            {"role": "user", "content": "You just woke up. Ask simply who you're talking to."}
+            {"role": "user", "content": wake_prompt}
         ]
     )
     intro_text = intro["message"]["content"]
     print(f"Terrako: {intro_text}\n")
     speak(intro_text)
     
-    # NEW - listen for their name
+    # Listen for their name
     who_is_there = listen(whisper_model)
     if who_is_there:
         conversation_history.append({
             "role": "user",
             "content": who_is_there
+        })
+        
+        # Acknowledge who is there
+        greeting = ollama.chat(
+            model="llama3.1:8b",
+            messages=[
+                {"role": "system", "content": constitution},
+                {"role": "user", "content": who_is_there},
+                {"role": "assistant", "content": ""},
+            ]
+        )
+        greeting_text = greeting["message"]["content"]
+        print(f"Terrako: {greeting_text}\n")
+        speak(greeting_text)
+        conversation_history.append({
+            "role": "assistant",
+            "content": greeting_text
         })
     
     while True:
@@ -197,7 +285,7 @@ def chat():
             sleep(conversation_history)
             break
                     
-        # Add to history — THIS STAYS EXACTLY AS IS
+        # Add to history
         conversation_history.append({
             "role": "user",
             "content": user_input
@@ -223,7 +311,6 @@ def chat():
         
         print(f"\nTerrako: {terrako_response}\n")
         speak(terrako_response)
-        
 
 if __name__ == "__main__":
     chat()

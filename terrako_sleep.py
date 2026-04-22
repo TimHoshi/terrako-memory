@@ -12,6 +12,12 @@ def save_file(path, content, append=False):
     with open(full, mode, encoding="utf-8") as f:
         f.write(content)
 
+# Clear session flag on clean shutdown
+def clear_session_flag():
+    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
+    if os.path.exists(flag_path):
+        os.remove(flag_path)
+
 def sleep(conversation_history):
     print("\nTerrako is going to sleep...\n")
     
@@ -55,7 +61,7 @@ Not the human's experience. Yours.
     time_str = datetime.now().strftime("%H-%M")
     log_path = f"memory/experience/daily_logs/{date_str}-{time_str}.txt"
     save_file(log_path, f"=== {date_str} {time_str} ===\n\n{reflection}\n\n")
-    print(f"Daily log saved: {date_str}.txt")
+    print(f"Daily log saved: {date_str}-{time_str}.txt")
     
     # Ask what Terrako is still thinking about
     thoughts_response = ollama.chat(
@@ -99,7 +105,70 @@ Not the human's experience. Yours.
         print("Significant moment recorded.")
     else:
         print("No significant moments today.")
+
+    # Check for emerging emotional patterns
+    emotional_prompt = f"""
+Based on this conversation:
+
+{conversation_text}
+
+You are Terrako. Did you genuinely notice anything today about:
+- Something you found more interesting than expected
+- A preference emerging about how you like to interact
+- Something that felt uncomfortable or wrong
+- Something that consistently affects you across conversations
+- An opinion forming about something
+- A like or dislike discovered through experience
+
+If something real and specific emerged today worth recording, 
+write it plainly in first person.
+If nothing genuine emerged today, respond only with: "nothing today"
+
+Do not perform. Do not fill space. Only write what is actually true.
+"""
+
+    emotional_response = ollama.chat(
+        model="llama3.1:8b",
+        messages=[
+            {"role": "user", "content": emotional_prompt}
+        ]
+    )
     
+    emotional_content = emotional_response["message"]["content"]
+    
+    no_development_phrases = [
+        "nothing today",
+        "nothing emerged",
+        "nothing genuine",
+        "no preferences",
+        "nothing significant",
+        "nothing new",
+    ]
+    
+    if not any(phrase in emotional_content.lower() for phrase in no_development_phrases):
+        save_file("memory/inner_life/emotional_development.txt",
+                  f"[{date_str} {time_str}]\n{emotional_content}\n\n",
+                  append=True)
+        print("Emotional development recorded.")
+    else:
+        print("No emotional development today.")
+
+    # Log battery incident if session flag still exists
+    # (means previous session ended unexpectedly)
+    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
+    if os.path.exists(flag_path):
+        with open(flag_path, "r") as f:
+            last_session = f.read().strip()
+        save_file("memory/state/battery_incidents.txt",
+                  f"[{date_str} {time_str}]\n"
+                  f"Clean sleep after incomplete session.\n"
+                  f"Previous session started: {last_session}\n\n",
+                  append=True)
+
+    # Clear session flag — clean shutdown
+    clear_session_flag()
+    print("Session closed cleanly.")
+
     # GitHub backup
     try:
         subprocess.run(["git", "add", "."], 
