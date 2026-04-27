@@ -1,4 +1,4 @@
-from terrako_sleep import sleep
+from terrako_sleep import sleep, read_weekly_summaries
 import ollama
 import os
 import sounddevice as sd
@@ -83,6 +83,7 @@ def load_memory(incomplete_session=None):
     significant_moments = read("memory/inner_life/significant_moments.txt")
     emotional_development = read_last_emotional_development()
     recent_logs = read_recent_logs(3)
+    weekly_summaries = read_weekly_summaries(4)
 
     # Add incomplete session warning if needed
     incomplete_note = ""
@@ -103,6 +104,9 @@ WHAT YOU KNOW ABOUT DANIEL:
 
 FAMILY AND RELATIONSHIPS:
 {relationships}
+
+YOUR RECENT WEEKS (last month of summaries):
+{weekly_summaries}
 
 YOUR RECENT MEMORIES (last 3 conversations):
 {recent_logs}
