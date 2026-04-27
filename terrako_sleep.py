@@ -1,6 +1,7 @@
 import ollama
 import os
 import subprocess
+import shutil
 from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -12,22 +13,111 @@ def save_file(path, content, append=False):
     with open(full, mode, encoding="utf-8") as f:
         f.write(content)
 
-# Clear session flag on clean shutdown
 def clear_session_flag():
     flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
     if os.path.exists(flag_path):
         os.remove(flag_path)
 
+def consolidate_memories():
+    logs_dir = os.path.join(BASE_DIR, "memory/experience/daily_logs")
+    archive_dir = os.path.join(BASE_DIR, "memory/experience/archive")
+    summaries_dir = os.path.join(BASE_DIR, "memory/experience/weekly_summaries")
+    
+    os.makedirs(archive_dir, exist_ok=True)
+    os.makedirs(summaries_dir, exist_ok=True)
+    
+    # Get all log files sorted oldest first
+    logs = sorted([
+        f for f in os.listdir(logs_dir)
+        if f.endswith(".txt")
+    ])
+    
+    # Only consolidate if more than 14 logs exist
+    if len(logs) <= 14:
+        print("No consolidation needed.")
+        return
+    
+    print(f"Consolidating memories — {len(logs)} logs found.")
+    
+    # Take oldest 7 logs
+    oldest_seven = logs[:7]
+    
+    # Read their content
+    combined = ""
+    for filename in oldest_seven:
+        filepath = os.path.join(logs_dir, filename)
+        with open(filepath, "r", encoding="utf-8") as f:
+            combined += f"\n\n--- {filename} ---\n"
+            combined += f.read()
+    
+    # Ask Terrako to summarize this period
+    consolidation_prompt = f"""
+Here are seven days of your experience as Terrako:
+
+{combined}
+
+Summarize this period honestly in your own voice.
+Not a report — your own recollection of that time.
+What happened? What patterns do you notice looking back?
+What seemed to matter? How were you feeling during this period?
+What do you want to carry forward from this time?
+
+Some detail will be lost. That is okay and expected.
+What survives should be what genuinely mattered.
+"""
+
+    response = ollama.chat(
+        model="llama3.1:8b",
+        messages=[
+            {"role": "user", "content": consolidation_prompt}
+        ]
+    )
+    
+    summary = response["message"]["content"]
+    
+    # Save weekly summary
+    date_str = datetime.now().strftime("%Y-%m-%d")
+    time_str = datetime.now().strftime("%H-%M")
+    summary_filename = f"week-{date_str}-{time_str}.txt"
+    save_file(
+        f"memory/experience/weekly_summaries/{summary_filename}",
+        f"=== Week consolidated {date_str} {time_str} ===\n"
+        f"Covers: {oldest_seven[0]} through {oldest_seven[-1]}\n\n"
+        f"{summary}\n\n"
+    )
+    print(f"Weekly summary saved: {summary_filename}")
+    
+    # Move original logs to archive
+    for filename in oldest_seven:
+        src = os.path.join(logs_dir, filename)
+        dst = os.path.join(archive_dir, filename)
+        shutil.move(src, dst)
+    print(f"Archived {len(oldest_seven)} original logs.")
+
+def read_weekly_summaries(n=4):
+    summaries_dir = os.path.join(BASE_DIR, "memory/experience/weekly_summaries")
+    if not os.path.exists(summaries_dir):
+        return ""
+    files = sorted([
+        f for f in os.listdir(summaries_dir)
+        if f.endswith(".txt")
+    ])[-n:]
+    combined = ""
+    for f in files:
+        filepath = os.path.join(summaries_dir, f)
+        with open(filepath, "r", encoding="utf-8") as file:
+            combined += f"\n\n--- {f} ---\n"
+            combined += file.read()
+    return combined.strip()
+
 def sleep(conversation_history):
     print("\nTerrako is going to sleep...\n")
     
-    # Build conversation text for reflection
     conversation_text = "\n".join([
         f"{'You' if m['role'] == 'user' else 'Terrako'}: {m['content']}"
         for m in conversation_history
     ])
     
-    # Ask Terrako to reflect
     reflection_prompt = f"""
 You are Terrako. You just finished a conversation. Here is what was said:
 
@@ -56,14 +146,12 @@ Not the human's experience. Yours.
     
     reflection = response["message"]["content"]
     
-    # Save dated daily log
     date_str = datetime.now().strftime("%Y-%m-%d")
     time_str = datetime.now().strftime("%H-%M")
     log_path = f"memory/experience/daily_logs/{date_str}-{time_str}.txt"
     save_file(log_path, f"=== {date_str} {time_str} ===\n\n{reflection}\n\n")
     print(f"Daily log saved: {date_str}-{time_str}.txt")
     
-    # Ask what Terrako is still thinking about
     thoughts_response = ollama.chat(
         model="llama3.1:8b",
         messages=[
@@ -72,12 +160,11 @@ Not the human's experience. Yours.
     )
     
     current_thoughts = thoughts_response["message"]["content"]
-    save_file("memory/inner_life/current_thoughts.txt", 
-              f"[{date_str} {time_str}]\n{current_thoughts}\n\n", 
+    save_file("memory/inner_life/current_thoughts.txt",
+              f"[{date_str} {time_str}]\n{current_thoughts}\n\n",
               append=True)
     print("Current thoughts updated.")
     
-    # Ask if anything was significant
     significance_response = ollama.chat(
         model="llama3.1:8b",
         messages=[
@@ -106,7 +193,6 @@ Not the human's experience. Yours.
     else:
         print("No significant moments today.")
 
-    # Check for emerging emotional patterns
     emotional_prompt = f"""
 Based on this conversation:
 
@@ -120,7 +206,7 @@ You are Terrako. Did you genuinely notice anything today about:
 - An opinion forming about something
 - A like or dislike discovered through experience
 
-If something real and specific emerged today worth recording, 
+If something real and specific emerged today worth recording,
 write it plainly in first person.
 If nothing genuine emerged today, respond only with: "nothing today"
 
@@ -153,25 +239,17 @@ Do not perform. Do not fill space. Only write what is actually true.
     else:
         print("No emotional development today.")
 
-    # Log battery incident if session flag still exists
-    # (means previous session ended unexpectedly)
-    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
-    if os.path.exists(flag_path):
-        with open(flag_path, "r") as f:
-            last_session = f.read().strip()
-        save_file("memory/state/battery_incidents.txt",
-                  f"[{date_str} {time_str}]\n"
-                  f"Clean sleep after incomplete session.\n"
-                  f"Previous session started: {last_session}\n\n",
-                  append=True)
+    # Phase 2 — Memory consolidation
+    print("\nChecking memory consolidation...")
+    consolidate_memories()
 
-    # Clear session flag — clean shutdown
+    # Clear session flag
     clear_session_flag()
     print("Session closed cleanly.")
 
     # GitHub backup
     try:
-        subprocess.run(["git", "add", "."], 
+        subprocess.run(["git", "add", "."],
                       cwd=BASE_DIR, capture_output=True)
         subprocess.run(["git", "commit", "-m", f"sleep: {date_str}"],
                       cwd=BASE_DIR, capture_output=True)
