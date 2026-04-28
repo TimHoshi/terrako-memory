@@ -265,18 +265,24 @@ def see(prompt="Describe what you see simply and in your own voice. You are Terr
                 return "I can't see anything right now."
             frame = latest_frame.copy()
         
-        # Save frame to disk
-        img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
-        cv2.imwrite(img_path, frame)
+        # Resize for better detail
+        frame_large = cv2.resize(frame, (640, 480))
         
-        # Send file path to ollama
+        # Save and read as raw bytes
+        img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
+        cv2.imwrite(img_path, frame_large)
+        
+        with open(img_path, "rb") as f:
+            image_bytes = f.read()
+        
+        # Pass raw bytes directly
         response = ollama.chat(
             model="llava:7b",
             messages=[
                 {
                     "role": "user",
                     "content": prompt,
-                    "images": [img_path]
+                    "images": [image_bytes]
                 }
             ]
         )
@@ -285,7 +291,7 @@ def see(prompt="Describe what you see simply and in your own voice. You are Terr
     
     except Exception as e:
         return f"I tried to look but something went wrong. {str(e)}"
-
+    
 def chat():
     # Check for incomplete previous session
     incomplete_session = check_last_session()
