@@ -8,14 +8,18 @@ from piper.voice import PiperVoice
 from datetime import datetime
 import cv2
 import base64
+import threading import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+latest_frame = None camera_running = False frame_lock = threading.Lock() motion_last_seen = 0
 
 # Session flag functions — track clean vs unexpected shutdowns
 def write_session_flag():
     flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
     os.makedirs(os.path.dirname(flag_path), exist_ok=True)
-    with open(flag_path, "w") as f:
+    with
+     open(flag_path, "w") as f:
         f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 def check_last_session():
@@ -213,39 +217,69 @@ def listen(whisper_model):
     return ""
 
 # Terrako sees through webcam
-def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
-    try:
-        cap = cv2.VideoCapture(0)
-        ret, frame = cap.read()
+def camera_loop(): 
+    global latest_frame, camera_running, motion_last_seen 
+    
+    cap = cv2.VideoCapture(0) cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320) 
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240) 
+    cap.set(cv2.CAP_PROP_FPS, 10) 
+    
+    prev_gray = None 
+    camera_running = True 
+    
+    while camera_running: 
+        ret, frame = cap.read() 
+        
+        if not ret: 
+            time.sleep(0.2) 
+            continue 
+        
+        with frame_lock: 
+            latest_frame = frame.copy() 
+            
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) 
+            gray = cv2.GaussianBlur(gray, (9, 9), 0) 
+            if prev_gray is not None: 
+                diff = cv2.absdiff(prev_gray, gray) 
+                motion_score = np.mean(diff) 
+                
+                if motion_score > 5: 
+                    motion_last_seen = time.time() 
+                    
+            prev_gray = gray 
+            time.sleep(0.05) 
+            
         cap.release()
 
-        if not ret:
-            return "I can't see anything right now. Something is wrong with my eyes."
-
-        # Save image temporarily
-        img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
-        cv2.imwrite(img_path, frame)
-
-        # Read image as bytes
-        with open(img_path, "rb") as f:
-            image_bytes = f.read()
-
-        # Send to vision model
-        response = ollama.chat(
-            model="llava:7b",
+def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"): 
+    global latest_frame 
+    
+    try: 
+        with frame_lock: 
+            if latest_frame is None: 
+                return "I can't see anything right now." 
+            frame = latest_frame.copy() 
+            
+        success, buffer = cv2.imencode(".jpg", frame) 
+        if not success: 
+            return "I couldn't process what I saw." 
+        
+        image_bytes = buffer.tobytes() 
+        
+        response = ollama.chat( 
+            model="llava:7b", 
             messages=[
                 {
                     "role": "user",
                     "content": prompt,
                     "images": [image_bytes]
-                }
-            ]
-        )
-
-        return response["message"]["content"]
-
-    except Exception as e:
-        return f"I tried to look but something went wrong. {str(e)}"
+                    }
+                ] 
+            ) 
+        
+        return response["message"]["content"] 
+    
+    except Exception as e: return f"I tried to look but something went wrong. {str(e)}"
 
 def chat():
     # Check for incomplete previous session
@@ -258,6 +292,9 @@ def chat():
     constitution = load_memory(incomplete_session)
     conversation_history = []
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+    camera_thread = threading.Thread(target=camera_loop, daemon=True)
+    camera_thread.start()
+    time.sleep(2)
 
     # Write session flag — marks this session as active
     write_session_flag()
@@ -338,7 +375,9 @@ def chat():
         if cleaned in ["quit", "exit", "goodbye", "goodnight", "good night", "bye"]:
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
-            sleep(conversation_history)
+            sleep(conversation_history) 
+            global camera_running 
+            camera_running = False 
             break
 
         # Check if user is asking about what Terrako sees
