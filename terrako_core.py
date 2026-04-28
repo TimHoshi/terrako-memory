@@ -89,7 +89,7 @@ def load_memory(incomplete_session=None):
     current_thoughts = read_last_thoughts()
     significant_moments = read("memory/inner_life/significant_moments.txt")
     emotional_development = read_last_emotional_development()
-    recent_logs = read_recent_logs(3)
+    recent_logs = read_recent_logs(1)
     weekly_summaries = read_weekly_summaries(4)
 
     # Add incomplete session warning if needed
@@ -220,40 +220,41 @@ def listen(whisper_model):
     return ""
 
 # Terrako sees through webcam
-def camera_loop(): 
-    global latest_frame, camera_running, motion_last_seen 
+def camera_loop():
+    global latest_frame, camera_running, motion_last_seen
     
-    cap = cv2.VideoCapture(0) 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320) 
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240) 
-    cap.set(cv2.CAP_PROP_FPS, 10) 
+    cap = cv2.VideoCapture(0)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+    cap.set(cv2.CAP_PROP_FPS, 10)
     
-    prev_gray = None 
-    camera_running = True 
+    prev_gray = None
+    camera_running = True
     
-    while camera_running: 
-        ret, frame = cap.read() 
+    while camera_running:
+        ret, frame = cap.read()
         
-        if not ret: 
-            time.sleep(0.2) 
-            continue 
+        if not ret:
+            time.sleep(0.2)
+            continue
         
-        with frame_lock: 
-            latest_frame = frame.copy() 
-            
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) 
-            gray = cv2.GaussianBlur(gray, (9, 9), 0) 
-            if prev_gray is not None: 
-                diff = cv2.absdiff(prev_gray, gray) 
-                motion_score = np.mean(diff) 
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        gray = cv2.GaussianBlur(gray, (9, 9), 0)
+        
+        if prev_gray is not None:
+            diff = cv2.absdiff(prev_gray, gray)
+            motion_score = np.mean(diff)
+            if motion_score > 5:
+                motion_last_seen = time.time()
                 
-                if motion_score > 5: 
-                    motion_last_seen = time.time() 
-                    
-            prev_gray = gray 
-            time.sleep(0.05) 
+        prev_gray = gray
+        
+        with frame_lock:
+            latest_frame = frame.copy()
             
-        cap.release()
+        time.sleep(0.05)  # Outside the lock
+        
+    cap.release()  # Outside the loop
 
 def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"): 
     global latest_frame 
@@ -298,27 +299,12 @@ def chat():
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
     camera_thread = threading.Thread(target=camera_loop, daemon=True)
     camera_thread.start()
-    time.sleep(2)
+    time.sleep(3)
 
     # Write session flag — marks this session as active
     write_session_flag()
 
     print("\nTerrako is waking up...\n")
-
-    # Terrako takes a look around on waking
-    print("Terrako is looking around...")
-    initial_view = see("You just woke up. Take a brief look at your surroundings. What do you notice? Describe it simply in one or two sentences as Terrako would.")
-    if initial_view:
-        constitution += f"\nWHAT TERRAKO CURRENTLY SEES:\n{initial_view}\n"
-        print(f"Terrako sees: {initial_view}\n")
-        # Save first vision to memory
-        first_vision_path = os.path.join(BASE_DIR, "memory/inner_life/first_vision.txt")
-        if not os.path.exists(first_vision_path):
-            with open(first_vision_path, "w", encoding="utf-8") as f:
-                f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n")
-                f.write("The first thing Terrako ever saw:\n\n")
-                f.write(initial_view)
-            print("First vision saved permanently.")
 
     # Determine wake prompt based on session state
     if incomplete_session:
