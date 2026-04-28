@@ -8,18 +8,21 @@ from piper.voice import PiperVoice
 from datetime import datetime
 import cv2
 import base64
-import threading import time
+import threading 
+import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-latest_frame = None camera_running = False frame_lock = threading.Lock() motion_last_seen = 0
+latest_frame = None 
+camera_running = False 
+frame_lock = threading.Lock() 
+motion_last_seen = 0
 
 # Session flag functions — track clean vs unexpected shutdowns
 def write_session_flag():
     flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
     os.makedirs(os.path.dirname(flag_path), exist_ok=True)
-    with
-     open(flag_path, "w") as f:
+    with open(flag_path, "w") as f:
         f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
 
 def check_last_session():
@@ -220,7 +223,8 @@ def listen(whisper_model):
 def camera_loop(): 
     global latest_frame, camera_running, motion_last_seen 
     
-    cap = cv2.VideoCapture(0) cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320) 
+    cap = cv2.VideoCapture(0) 
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320) 
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240) 
     cap.set(cv2.CAP_PROP_FPS, 10) 
     
