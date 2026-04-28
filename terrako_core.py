@@ -256,35 +256,35 @@ def camera_loop():
         
     cap.release()  # Outside the loop
 
-def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"): 
-    global latest_frame 
+def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
+    global latest_frame
     
-    try: 
-        with frame_lock: 
-            if latest_frame is None: 
-                return "I can't see anything right now." 
-            frame = latest_frame.copy() 
-            
-        success, buffer = cv2.imencode(".jpg", frame) 
-        if not success: 
-            return "I couldn't process what I saw." 
+    try:
+        with frame_lock:
+            if latest_frame is None:
+                return "I can't see anything right now."
+            frame = latest_frame.copy()
         
-        image_bytes = buffer.tobytes() 
+        # Save frame to disk
+        img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
+        cv2.imwrite(img_path, frame)
         
-        response = ollama.chat( 
-            model="llava:7b", 
+        # Send file path to ollama
+        response = ollama.chat(
+            model="llava:7b",
             messages=[
                 {
                     "role": "user",
                     "content": prompt,
-                    "images": [image_bytes]
-                    }
-                ] 
-            ) 
+                    "images": [img_path]
+                }
+            ]
+        )
         
-        return response["message"]["content"] 
+        return response["message"]["content"]
     
-    except Exception as e: return f"I tried to look but something went wrong. {str(e)}"
+    except Exception as e:
+        return f"I tried to look but something went wrong. {str(e)}"
 
 def chat():
     # Check for incomplete previous session
