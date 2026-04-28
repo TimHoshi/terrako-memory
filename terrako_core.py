@@ -111,15 +111,6 @@ WHAT YOU KNOW ABOUT DANIEL:
 
 FAMILY AND RELATIONSHIPS:
 {relationships}
-
-WHAT YOU ARE CURRENTLY THINKING ABOUT:
-{current_thoughts}
-
-MOMENTS YOU NEVER WANT TO FORGET:
-{significant_moments}
-
-YOUR EMOTIONAL DEVELOPMENT:
-{emotional_development}
 {incomplete_note}
 """
 
