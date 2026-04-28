@@ -53,7 +53,7 @@ def load_memory(incomplete_session=None):
                 return f.read().strip()
         return ""
     
-    def read_recent_logs(n=3):
+    def read_recent_logs(n=0):
         logs_dir = os.path.join(base, "memory/experience/daily_logs")
         if not os.path.exists(logs_dir):
             return ""
@@ -89,7 +89,7 @@ def load_memory(incomplete_session=None):
     current_thoughts = read_last_thoughts()
     significant_moments = read("memory/inner_life/significant_moments.txt")
     emotional_development = read_last_emotional_development()
-    recent_logs = read_recent_logs(1)
+    recent_logs = read_recent_logs(0)
     weekly_summaries = read_weekly_summaries(4)
 
     # Add incomplete session warning if needed
@@ -112,19 +112,13 @@ WHAT YOU KNOW ABOUT DANIEL:
 FAMILY AND RELATIONSHIPS:
 {relationships}
 
-YOUR RECENT WEEKS (last month of summaries):
-{weekly_summaries}
-
-YOUR RECENT MEMORIES (last 3 conversations):
-{recent_logs}
-
 WHAT YOU ARE CURRENTLY THINKING ABOUT:
 {current_thoughts}
 
 MOMENTS YOU NEVER WANT TO FORGET:
 {significant_moments}
 
-YOUR EMOTIONAL DEVELOPMENT - GENUINE PREFERENCES AND FEELINGS:
+YOUR EMOTIONAL DEVELOPMENT:
 {emotional_development}
 {incomplete_note}
 """
