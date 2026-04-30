@@ -11,7 +11,6 @@ import base64
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Session flag functions
 def write_session_flag():
     flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
     os.makedirs(os.path.dirname(flag_path), exist_ok=True)
@@ -34,7 +33,6 @@ def log_battery_incident(last_session):
                 f"Last active: {last_session}\n"
                 f"Memories from that session may be incomplete.\n\n")
 
-# load_memory() loads constitution plus all memory files
 def load_memory(incomplete_session=None):
     base = BASE_DIR
 
@@ -78,15 +76,14 @@ def load_memory(incomplete_session=None):
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
-    current_thoughts = read_last_thoughts()
+    current_thoughts = ""
     significant_moments = read("memory/inner_life/significant_moments.txt")
-    emotional_development = read_last_emotional_development()
+    emotional_development = ""
     recent_logs = read_recent_logs(1)
 
     incomplete_note = ""
     if incomplete_session:
         incomplete_note = f"""
-
 IMPORTANT - INCOMPLETE PREVIOUS SESSION:
 Your last session on {incomplete_session} ended unexpectedly.
 You may be missing memories from that session.
@@ -102,22 +99,9 @@ WHAT YOU KNOW ABOUT DANIEL:
 
 FAMILY AND RELATIONSHIPS:
 {relationships}
-
-YOUR RECENT MEMORIES (last conversation):
-{recent_logs}
-
-WHAT YOU ARE CURRENTLY THINKING ABOUT:
-{current_thoughts}
-
-MOMENTS YOU NEVER WANT TO FORGET:
-{significant_moments}
-
-YOUR EMOTIONAL DEVELOPMENT:
-{emotional_development}
 {incomplete_note}
 """
 
-# Terrako speaks out loud through Piper
 def speak(text):
     voice_path = os.path.join(BASE_DIR,
         "voices", "en_US-lessac-medium.onnx")
@@ -134,7 +118,6 @@ def speak(text):
     stream.stop()
     stream.close()
 
-# Terrako listens through mic via Whisper
 def listen(whisper_model):
     print("Listening...")
 
@@ -202,19 +185,15 @@ def listen(whisper_model):
         return text
     return ""
 
-# Terrako sees with moondream
 def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
     try:
         cap = cv2.VideoCapture(0)
-
         if not cap.isOpened():
-            return "I can't open my eyes right now."
-
+            return None
         ret, frame = cap.read()
         cap.release()
-
         if not ret:
-            return "I couldn't see anything."
+            return None
 
         img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
         cv2.imwrite(img_path, frame)
@@ -231,7 +210,7 @@ def see(prompt="Describe what you see simply and in your own voice. You are Terr
         return response["response"]
 
     except Exception as e:
-        return f"I tried to look but something went wrong: {e}"
+        return None
 
 def chat():
     incomplete_session = check_last_session()
@@ -302,7 +281,6 @@ def chat():
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
             sleep(conversation_history)
-            global camera_running
             break
 
         vision_triggers = [
