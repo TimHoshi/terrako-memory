@@ -8,15 +8,8 @@ from piper.voice import PiperVoice
 from datetime import datetime
 import cv2
 import base64
-import threading
-import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-latest_frame = None
-camera_running = False
-frame_lock = threading.Lock()
-motion_last_seen = 0
 
 # Session flag functions
 def write_session_flag():
@@ -93,6 +86,7 @@ def load_memory(incomplete_session=None):
     incomplete_note = ""
     if incomplete_session:
         incomplete_note = f"""
+
 IMPORTANT - INCOMPLETE PREVIOUS SESSION:
 Your last session on {incomplete_session} ended unexpectedly.
 You may be missing memories from that session.
@@ -194,7 +188,7 @@ def listen(whisper_model):
             "teraco": "Terrako",
             "torako": "Terrako",
             "tirico": "Terrako",
-"terraco": "Terrako",
+            "terraco": "Terrako",
             "terrko": "Terrako",
             "terako": "Terrako",
             "terroco": "Terrako",
@@ -207,56 +201,22 @@ def listen(whisper_model):
         return text
     return ""
 
-# Camera loop — runs in background thread
-def camera_loop():
-    global latest_frame, camera_running, motion_last_seen
+# Terrako sees with moondream
+def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
+    try:
+        cap = cv2.VideoCapture(0)
 
-    cap = cv2.VideoCapture(0)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-    cap.set(cv2.CAP_PROP_FPS, 10)
+        if not cap.isOpened():
+            return "I can't open my eyes right now."
 
-    prev_gray = None
-    camera_running = True
-
-    while camera_running:
         ret, frame = cap.read()
+        cap.release()
 
         if not ret:
-            time.sleep(0.2)
-            continue
+            return "I couldn't see anything."
 
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        gray = cv2.GaussianBlur(gray, (9, 9), 0)
-
-        if prev_gray is not None:
-            diff = cv2.absdiff(prev_gray, gray)
-            motion_score = np.mean(diff)
-            if motion_score > 5:
-                motion_last_seen = time.time()
-
-        prev_gray = gray
-
-        with frame_lock:
-            latest_frame = frame.copy()
-
-        time.sleep(0.05)
-
-    cap.release()
-
-# Terrako sees — disabled until vision fixed
-def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
-    global latest_frame
-
-    try:
-        with frame_lock:
-            if latest_frame is None:
-                return None
-            frame = latest_frame.copy()
-
-        frame_large = cv2.resize(frame, (640, 480))
         img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
-        cv2.imwrite(img_path, frame_large)
+        cv2.imwrite(img_path, frame)
 
         with open(img_path, "rb") as f:
             img_base64 = base64.b64encode(f.read()).decode("utf-8")
@@ -270,7 +230,7 @@ def see(prompt="Describe what you see simply and in your own voice. You are Terr
         return response["response"]
 
     except Exception as e:
-        return None
+        return f"I tried to look but something went wrong: {e}"
 
 def chat():
     incomplete_session = check_last_session()
@@ -281,11 +241,6 @@ def chat():
     constitution = load_memory(incomplete_session)
     conversation_history = []
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
-
-    # Start camera thread
-    camera_thread = threading.Thread(target=camera_loop, daemon=True)
-    camera_thread.start()
-    time.sleep(2)
 
     write_session_flag()
 
@@ -347,7 +302,6 @@ def chat():
             speak("Goodnight. I'll think about today.")
             sleep(conversation_history)
             global camera_running
-            camera_running = False
             break
 
         vision_triggers = [
