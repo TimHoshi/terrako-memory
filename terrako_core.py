@@ -8,17 +8,17 @@ from piper.voice import PiperVoice
 from datetime import datetime
 import cv2
 import base64
-import threading 
+import threading
 import time
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-latest_frame = None 
-camera_running = False 
-frame_lock = threading.Lock() 
+latest_frame = None
+camera_running = False
+frame_lock = threading.Lock()
 motion_last_seen = 0
 
-# Session flag functions — track clean vs unexpected shutdowns
+# Session flag functions
 def write_session_flag():
     flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
     os.makedirs(os.path.dirname(flag_path), exist_ok=True)
@@ -42,23 +42,22 @@ def log_battery_incident(last_session):
                 f"Memories from that session may be incomplete.\n\n")
 
 # load_memory() loads constitution plus all memory files
-# This grows over time as Terrako gains more memories
 def load_memory(incomplete_session=None):
     base = BASE_DIR
-    
+
     def read(path):
         full = os.path.join(base, path)
         if os.path.exists(full):
             with open(full, "r", encoding="utf-8") as f:
                 return f.read().strip()
         return ""
-    
-    def read_recent_logs(n=0):
+
+    def read_recent_logs(n=1):
         logs_dir = os.path.join(base, "memory/experience/daily_logs")
         if not os.path.exists(logs_dir):
             return ""
         files = sorted([
-            f for f in os.listdir(logs_dir) 
+            f for f in os.listdir(logs_dir)
             if f.endswith(".txt")
         ])[-n:]
         combined = ""
@@ -66,7 +65,7 @@ def load_memory(incomplete_session=None):
             combined += f"\n\n--- {f} ---\n"
             combined += read(f"memory/experience/daily_logs/{f}")
         return combined.strip()
-    
+
     def read_last_thoughts():
         path = os.path.join(base, "memory/inner_life/current_thoughts.txt")
         if not os.path.exists(path):
@@ -81,7 +80,7 @@ def load_memory(incomplete_session=None):
             return ""
         with open(path, "r", encoding="utf-8") as f:
             content = f.read().strip()
-        return content[-800:] if len(content) > 800 else content
+        return content[-500:] if len(content) > 500 else content
 
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
@@ -89,10 +88,8 @@ def load_memory(incomplete_session=None):
     current_thoughts = read_last_thoughts()
     significant_moments = read("memory/inner_life/significant_moments.txt")
     emotional_development = read_last_emotional_development()
-    recent_logs = read_recent_logs(0)
-    weekly_summaries = read_weekly_summaries(4)
+    recent_logs = read_recent_logs(1)
 
-    # Add incomplete session warning if needed
     incomplete_note = ""
     if incomplete_session:
         incomplete_note = f"""
@@ -111,6 +108,18 @@ WHAT YOU KNOW ABOUT DANIEL:
 
 FAMILY AND RELATIONSHIPS:
 {relationships}
+
+YOUR RECENT MEMORIES (last conversation):
+{recent_logs}
+
+WHAT YOU ARE CURRENTLY THINKING ABOUT:
+{current_thoughts}
+
+MOMENTS YOU NEVER WANT TO FORGET:
+{significant_moments}
+
+YOUR EMOTIONAL DEVELOPMENT:
+{emotional_development}
 {incomplete_note}
 """
 
@@ -136,10 +145,10 @@ def listen(whisper_model):
     print("Listening...")
 
     sample_rate = 16000
-    chunk_duration = 0.5  # seconds per chunk
+    chunk_duration = 0.5
     chunk_samples = int(sample_rate * chunk_duration)
-    max_duration = 15  # maximum seconds to listen
-    silence_threshold = 2  # seconds of silence before stopping
+    max_duration = 15
+    silence_threshold = 2
 
     audio_chunks = []
     silent_time = 0
@@ -150,25 +159,20 @@ def listen(whisper_model):
             chunk_array = np.frombuffer(chunk, dtype=np.int16).astype("float32") / 32768.0
             audio_chunks.append(chunk_array)
 
-            # Check if this chunk is silence
             if np.abs(chunk_array).mean() < 0.002:
                 silent_time += chunk_duration
             else:
                 silent_time = 0
 
-            # Total recorded duration
             total_duration = len(audio_chunks) * chunk_duration
 
-            # Stop if silence detected after speech, or max duration reached
             if silent_time >= silence_threshold and total_duration > 1.0:
                 break
             if total_duration >= max_duration:
                 break
 
-    # Combine all chunks
     audio = np.concatenate(audio_chunks)
 
-    # Transcribe with VAD
     segments, _ = whisper_model.transcribe(
         audio,
         language="en",
@@ -183,7 +187,6 @@ def listen(whisper_model):
     text = " ".join([s.text for s in segments]).strip()
 
     if text:
-        # Correct common Terrako mishearings
         corrections = {
             "teracle": "Terrako",
             "tarako": "Terrako",
@@ -191,7 +194,7 @@ def listen(whisper_model):
             "teraco": "Terrako",
             "torako": "Terrako",
             "tirico": "Terrako",
-            "terraco": "Terrako",
+"terraco": "Terrako",
             "terrko": "Terrako",
             "terako": "Terrako",
             "terroco": "Terrako",
@@ -204,100 +207,90 @@ def listen(whisper_model):
         return text
     return ""
 
-# Terrako sees through webcam
+# Camera loop — runs in background thread
 def camera_loop():
     global latest_frame, camera_running, motion_last_seen
-    
+
     cap = cv2.VideoCapture(0)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
     cap.set(cv2.CAP_PROP_FPS, 10)
-    
+
     prev_gray = None
     camera_running = True
-    
+
     while camera_running:
         ret, frame = cap.read()
-        
+
         if not ret:
             time.sleep(0.2)
             continue
-        
+
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         gray = cv2.GaussianBlur(gray, (9, 9), 0)
-        
+
         if prev_gray is not None:
             diff = cv2.absdiff(prev_gray, gray)
             motion_score = np.mean(diff)
             if motion_score > 5:
                 motion_last_seen = time.time()
-                
+
         prev_gray = gray
-        
+
         with frame_lock:
             latest_frame = frame.copy()
-            
-        time.sleep(0.05)  # Outside the lock
-        
-    cap.release()  # Outside the loop
 
+        time.sleep(0.05)
+
+    cap.release()
+
+# Terrako sees — disabled until vision fixed
 def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
     global latest_frame
-    
+
     try:
         with frame_lock:
             if latest_frame is None:
-                return "I can't see anything right now."
+                return None
             frame = latest_frame.copy()
-        
-        # Resize for better detail
+
         frame_large = cv2.resize(frame, (640, 480))
-        
-        # Save and read as raw bytes
         img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
         cv2.imwrite(img_path, frame_large)
-        
+
         with open(img_path, "rb") as f:
-            image_bytes = f.read()
-        
-        # Pass raw bytes directly
-        response = ollama.chat(
-            model="llava:7b",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                    "images": [image_bytes]
-                }
-            ]
+            img_base64 = base64.b64encode(f.read()).decode("utf-8")
+
+        response = ollama.generate(
+            model="moondream",
+            prompt=prompt,
+            images=[img_base64]
         )
-        
-        return response["message"]["content"]
-    
+
+        return response["response"]
+
     except Exception as e:
-        return f"I tried to look but something went wrong. {str(e)}"
-    
+        return None
+
 def chat():
-    # Check for incomplete previous session
     incomplete_session = check_last_session()
     if incomplete_session:
         print(f"Note: Previous session ended unexpectedly at {incomplete_session}")
         log_battery_incident(incomplete_session)
 
-    # Load memory with incomplete session context if needed
     constitution = load_memory(incomplete_session)
     conversation_history = []
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+
+    # Start camera thread
     camera_thread = threading.Thread(target=camera_loop, daemon=True)
     camera_thread.start()
-    time.sleep(3)
+    time.sleep(2)
 
-    # Write session flag — marks this session as active
     write_session_flag()
 
     print("\nTerrako is waking up...\n")
 
-    # Determine wake prompt based on session state
     if incomplete_session:
         wake_prompt = (
             "You just woke up but your last session ended unexpectedly. "
@@ -308,7 +301,6 @@ def chat():
     else:
         wake_prompt = "You just woke up. Ask simply who you're talking to."
 
-    # Ask who is there
     intro = ollama.chat(
         model="llama3.1:8b",
         messages=[
@@ -320,7 +312,6 @@ def chat():
     print(f"Terrako: {intro_text}\n")
     speak(intro_text)
 
-    # Listen for their name
     who_is_there = listen(whisper_model)
     if who_is_there:
         conversation_history.append({
@@ -328,7 +319,6 @@ def chat():
             "content": who_is_there
         })
 
-        # Acknowledge who is there
         greeting = ollama.chat(
             model="llama3.1:8b",
             messages=[
@@ -346,7 +336,6 @@ def chat():
         })
 
     while True:
-        # Get user input
         user_input = listen(whisper_model)
 
         if not user_input:
@@ -356,12 +345,11 @@ def chat():
         if cleaned in ["quit", "exit", "goodbye", "goodnight", "good night", "bye"]:
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
-            sleep(conversation_history) 
-            global camera_running 
-            camera_running = False 
+            sleep(conversation_history)
+            global camera_running
+            camera_running = False
             break
 
-        # Check if user is asking about what Terrako sees
         vision_triggers = [
             "what do you see", "can you see", "look at",
             "what's in front", "describe what", "what do i look like",
@@ -371,15 +359,14 @@ def chat():
         if any(trigger in user_input.lower() for trigger in vision_triggers):
             print("Terrako is looking...")
             vision_description = see()
-            user_input = f"{user_input} [Terrako looks and sees: {vision_description}]"
+            if vision_description:
+                user_input = f"{user_input} [Terrako looks and sees: {vision_description}]"
 
-        # Add to history
         conversation_history.append({
             "role": "user",
             "content": user_input
         })
 
-        # Send to ollama
         print("Terrako is thinking...")
         response = ollama.chat(
             model="llama3.1:8b",
@@ -388,10 +375,8 @@ def chat():
             ] + conversation_history
         )
 
-        # Get response
         terrako_response = response["message"]["content"]
 
-        # Add to history
         conversation_history.append({
             "role": "assistant",
             "content": terrako_response
