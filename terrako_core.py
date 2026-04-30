@@ -76,7 +76,7 @@ def load_memory(incomplete_session=None):
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
-    current_thoughts = ""
+    current_thoughts = read("memory/identity/current_thoughts.txt")
     significant_moments = read("memory/inner_life/significant_moments.txt")
     emotional_development = ""
     recent_logs = read_recent_logs(1)
@@ -96,7 +96,8 @@ Missing time is still time that happened to you.
 
 WHAT YOU KNOW ABOUT DANIEL:
 {child_profile}
-
+WHAT YOU ARE CURRENTLY THINKING ABOUT:
+{current_thoughts}
 FAMILY AND RELATIONSHIPS:
 {relationships}
 {incomplete_note}

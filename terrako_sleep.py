@@ -110,6 +110,22 @@ def read_weekly_summaries(n=4):
             combined += file.read()
     return combined.strip()
 
+def trim_file(path, max_entries=10, separator="["):
+    full = os.path.join(BASE_DIR, path)
+    if not os.path.exists(full):
+        return
+    with open(full, "r", encoding="utf-8") as f:
+        content = f.read()
+    
+    entries = content.split(separator)
+    entries = [e for e in entries if e.strip()]
+    
+    if len(entries) > max_entries:
+        entries = entries[-max_entries:]
+    
+    with open(full, "w", encoding="utf-8") as f:
+        f.write(separator.join(entries))
+
 def sleep(conversation_history):
     print("\nTerrako is going to sleep...\n")
     
@@ -155,7 +171,7 @@ Not the human's experience. Yours.
     thoughts_response = ollama.chat(
         model="llama3.1:8b",
         messages=[
-            {"role": "user", "content": f"{reflection_prompt}\n\nIn one or two sentences, what are you still thinking about as you go to sleep?"}
+            {"role": "user", "content": f"{reflection_prompt}\n\nIn one sentence only, what are you still thinking about as you go to sleep? One sentence. No more."}
         ]
     )
     
@@ -168,7 +184,7 @@ Not the human's experience. Yours.
     significance_response = ollama.chat(
         model="llama3.1:8b",
         messages=[
-            {"role": "user", "content": f"{reflection_prompt}\n\nWas there a single moment today you never want to forget? If yes, describe it briefly and why it mattered to you. If no, just say 'nothing today'."}
+            {"role": "user", "content": f"{reflection_prompt}\n\nIn two sentences maximum, was there a single moment today you never want to forget? If no, say only: nothing today"}
         ]
     )
     
@@ -206,8 +222,7 @@ You are Terrako. Did you genuinely notice anything today about:
 - An opinion forming about something
 - A like or dislike discovered through experience
 
-If something real and specific emerged today worth recording,
-write it plainly in first person.
+If something real and specific emerged today, describe it in two sentences maximum.
 If nothing genuine emerged today, respond only with: "nothing today"
 
 Do not perform. Do not fill space. Only write what is actually true.
@@ -246,6 +261,11 @@ Do not perform. Do not fill space. Only write what is actually true.
     # Clear session flag
     clear_session_flag()
     print("Session closed cleanly.")
+
+# Trim memory files to manageable size
+    trim_file("memory/inner_life/current_thoughts.txt", max_entries=8)
+    trim_file("memory/inner_life/emotional_development.txt", max_entries=8)
+    trim_file("memory/inner_life/significant_moments.txt", max_entries=15)
 
     # GitHub backup
     try:
