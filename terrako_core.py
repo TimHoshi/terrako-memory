@@ -192,6 +192,7 @@ def listen(whisper_model):
             "terrko": "Terrako",
             "terako": "Terrako",
             "terroco": "Terrako",
+            "toronto": "Terrako",
         }
         text_lower = text.lower()
         for wrong, right in corrections.items():
