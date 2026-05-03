@@ -67,7 +67,7 @@ What survives should be what genuinely mattered.
 """
 
     response = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "user", "content": consolidation_prompt}
         ]
@@ -154,7 +154,7 @@ Not the human's experience. Yours.
 """
 
     response = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "user", "content": reflection_prompt}
         ]
@@ -169,7 +169,7 @@ Not the human's experience. Yours.
     print(f"Daily log saved: {date_str}-{time_str}.txt")
     
     thoughts_response = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "user", "content": f"{reflection_prompt}\n\nIn one sentence only, what are you still thinking about as you go to sleep? One sentence. No more."}
         ]
@@ -182,7 +182,7 @@ Not the human's experience. Yours.
     print("Current thoughts updated.")
     
     significance_response = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "user", "content": f"{reflection_prompt}\n\nIn two sentences maximum, was there a single moment today you never want to forget? If no, say only: nothing today"}
         ]
@@ -229,7 +229,7 @@ Do not perform. Do not fill space. Only write what is actually true.
 """
 
     emotional_response = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "user", "content": emotional_prompt}
         ]
