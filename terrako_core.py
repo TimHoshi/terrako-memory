@@ -238,7 +238,7 @@ def chat():
         wake_prompt = "You just woke up. Ask simply who you're talking to."
 
     intro = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "system", "content": constitution},
             {"role": "user", "content": wake_prompt}
@@ -256,7 +256,7 @@ def chat():
         })
 
         greeting = ollama.chat(
-            model="llama3.1:8b",
+            model="phi3:mini",
             messages=[
                 {"role": "system", "content": constitution},
                 {"role": "user", "content": who_is_there},
@@ -303,7 +303,7 @@ def chat():
 
         print("Terrako is thinking...")
         response = ollama.chat(
-            model="llama3.1:8b",
+            model="phi3:mini",
             messages=[
                 {"role": "system", "content": constitution}
             ] + conversation_history
