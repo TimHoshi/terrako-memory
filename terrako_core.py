@@ -183,7 +183,7 @@ def listen(whisper_model):
 
 def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
     try:
-        cap = cv2.VideoCapture(0)
+        cap = cv2.VideoCapture(1)
         if not cap.isOpened():
             return None
         ret, frame = cap.read()
@@ -293,7 +293,13 @@ def chat():
 
         response = ollama.chat(
             model="phi3:mini",
+<<<<<<< HEAD
             messages=[{"role": "system", "content": constitution}] + conversation_history
+=======
+            messages=[
+                {"role": "system", "content": constitution}
+            ] + conversation_history
+>>>>>>> d061f2dfb899753a59ce9299993f1aaf37d3b2b3
         )
         terrako_response = response["message"]["content"]
         conversation_history.append({"role": "assistant", "content": terrako_response})
