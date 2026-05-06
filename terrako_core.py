@@ -8,6 +8,30 @@ from piper.voice import PiperVoice
 from datetime import datetime
 import cv2
 import base64
+import time
+
+# Boot time tracking
+BOOT_TIME = time.time()
+BATTERY_WARNING_MINS = 60   # warn after 60 minutes
+BATTERY_CRITICAL_MINS = 80  # critical after 80 minutes
+_battery_warned = False
+_battery_critical = False
+
+def check_battery_time():
+    """Call periodically in main loop."""
+    global _battery_warned, _battery_critical
+    
+    elapsed_mins = (time.time() - BOOT_TIME) / 60
+    
+    if elapsed_mins > BATTERY_CRITICAL_MINS and not _battery_critical:
+        _battery_critical = True
+        return 'CRITICAL'
+    
+    if elapsed_mins > BATTERY_WARNING_MINS and not _battery_warned:
+        _battery_warned = True
+        return 'LOW'
+    
+    return None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
