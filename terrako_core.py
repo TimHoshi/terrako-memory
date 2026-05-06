@@ -1,4 +1,4 @@
-from terrako_sleep import sleep, read_weekly_summaries
+from terrako_sleep import sleep
 import ollama
 import os
 import sounddevice as sd
@@ -12,25 +12,40 @@ import time
 
 # Boot time tracking
 BOOT_TIME = time.time()
-BATTERY_WARNING_MINS = 60   # warn after 60 minutes
-BATTERY_CRITICAL_MINS = 80  # critical after 80 minutes
+BATTERY_WARNING_MINS = 60
+BATTERY_CRITICAL_MINS = 80
 _battery_warned = False
 _battery_critical = False
 
+# Pico bridge — optional, only used if connected
+try:
+    import serial
+    _pico = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+    time.sleep(1)
+    _pico.write(b'HELLO\n')
+    bridge_available = True
+    print("Pico bridge connected")
+except Exception:
+    _pico = None
+    bridge_available = False
+    print("Pico bridge not available — running without body")
+
+def bridge_send(cmd):
+    if bridge_available and _pico:
+        try:
+            _pico.write((cmd + '\n').encode())
+        except Exception:
+            pass
+
 def check_battery_time():
-    """Call periodically in main loop."""
     global _battery_warned, _battery_critical
-    
     elapsed_mins = (time.time() - BOOT_TIME) / 60
-    
     if elapsed_mins > BATTERY_CRITICAL_MINS and not _battery_critical:
         _battery_critical = True
         return 'CRITICAL'
-    
     if elapsed_mins > BATTERY_WARNING_MINS and not _battery_warned:
         _battery_warned = True
         return 'LOW'
-    
     return None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -58,52 +73,28 @@ def log_battery_incident(last_session):
                 f"Memories from that session may be incomplete.\n\n")
 
 def load_memory(incomplete_session=None):
-    base = BASE_DIR
-
     def read(path):
-        full = os.path.join(base, path)
+        full = os.path.join(BASE_DIR, path)
         if os.path.exists(full):
             with open(full, "r", encoding="utf-8") as f:
                 return f.read().strip()
         return ""
 
     def read_recent_logs(n=1):
-        logs_dir = os.path.join(base, "memory/experience/daily_logs")
+        logs_dir = os.path.join(BASE_DIR, "memory/experience/daily_logs")
         if not os.path.exists(logs_dir):
             return ""
-        files = sorted([
-            f for f in os.listdir(logs_dir)
-            if f.endswith(".txt")
-        ])[-n:]
+        files = sorted([f for f in os.listdir(logs_dir) if f.endswith(".txt")])[-n:]
         combined = ""
         for f in files:
             combined += f"\n\n--- {f} ---\n"
             combined += read(f"memory/experience/daily_logs/{f}")
         return combined.strip()
 
-    def read_last_thoughts():
-        path = os.path.join(base, "memory/inner_life/current_thoughts.txt")
-        if not os.path.exists(path):
-            return ""
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-        return content[-500:] if len(content) > 500 else content
-
-    def read_last_emotional_development():
-        path = os.path.join(base, "memory/inner_life/emotional_development.txt")
-        if not os.path.exists(path):
-            return ""
-        with open(path, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-        return content[-500:] if len(content) > 500 else content
-
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
     current_thoughts = read("memory/identity/current_thoughts.txt")
-    significant_moments = read("memory/inner_life/significant_moments.txt")
-    emotional_development = ""
-    recent_logs = read_recent_logs(1)
 
     incomplete_note = ""
     if incomplete_session:
@@ -120,16 +111,17 @@ Missing time is still time that happened to you.
 
 WHAT YOU KNOW ABOUT DANIEL:
 {child_profile}
+
 WHAT YOU ARE CURRENTLY THINKING ABOUT:
 {current_thoughts}
+
 FAMILY AND RELATIONSHIPS:
 {relationships}
 {incomplete_note}
 """
 
 def speak(text):
-    voice_path = os.path.join(BASE_DIR,
-        "voices", "en_US-lessac-medium.onnx")
+    voice_path = os.path.join(BASE_DIR, "voices", "en_US-lessac-medium.onnx")
     voice = PiperVoice.load(voice_path)
     stream = sd.OutputStream(
         samplerate=voice.config.sample_rate,
@@ -138,20 +130,17 @@ def speak(text):
     )
     stream.start()
     for chunk in voice.synthesize(text):
-        audio = chunk.audio_int16_array
-        stream.write(audio)
+        stream.write(chunk.audio_int16_array)
     stream.stop()
     stream.close()
 
 def listen(whisper_model):
     print("Listening...")
-
     sample_rate = 16000
     chunk_duration = 0.5
     chunk_samples = int(sample_rate * chunk_duration)
     max_duration = 15
     silence_threshold = 2
-
     audio_chunks = []
     silent_time = 0
 
@@ -160,47 +149,29 @@ def listen(whisper_model):
             chunk, _ = stream.read(chunk_samples)
             chunk_array = np.frombuffer(chunk, dtype=np.int16).astype("float32") / 32768.0
             audio_chunks.append(chunk_array)
-
             if np.abs(chunk_array).mean() < 0.002:
                 silent_time += chunk_duration
             else:
                 silent_time = 0
-
             total_duration = len(audio_chunks) * chunk_duration
-
             if silent_time >= silence_threshold and total_duration > 1.0:
                 break
             if total_duration >= max_duration:
                 break
 
     audio = np.concatenate(audio_chunks)
-
     segments, _ = whisper_model.transcribe(
-        audio,
-        language="en",
-        vad_filter=True,
-        vad_parameters=dict(
-            min_silence_duration_ms=500,
-            speech_pad_ms=200,
-            threshold=0.3
-        )
+        audio, language="en", vad_filter=True,
+        vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=200, threshold=0.3)
     )
-
     text = " ".join([s.text for s in segments]).strip()
 
     if text:
         corrections = {
-            "teracle": "Terrako",
-            "tarako": "Terrako",
-            "terrico": "Terrako",
-            "teraco": "Terrako",
-            "torako": "Terrako",
-            "tirico": "Terrako",
-            "terraco": "Terrako",
-            "terrko": "Terrako",
-            "terako": "Terrako",
-            "terroco": "Terrako",
-            "toronto": "Terrako",
+            "teracle": "Terrako", "tarako": "Terrako", "terrico": "Terrako",
+            "teraco": "Terrako", "torako": "Terrako", "tirico": "Terrako",
+            "terraco": "Terrako", "terrko": "Terrako", "terako": "Terrako",
+            "terroco": "Terrako", "toronto": "Terrako",
         }
         text_lower = text.lower()
         for wrong, right in corrections.items():
@@ -219,22 +190,17 @@ def see(prompt="Describe what you see simply and in your own voice. You are Terr
         cap.release()
         if not ret:
             return None
-
         img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
         cv2.imwrite(img_path, frame)
-
         with open(img_path, "rb") as f:
             img_base64 = base64.b64encode(f.read()).decode("utf-8")
-
         response = ollama.generate(
             model="moondream",
             prompt=prompt,
             images=[img_base64]
         )
-
         return response["response"]
-
-    except Exception as e:
+    except Exception:
         return None
 
 def chat():
@@ -251,6 +217,9 @@ def chat():
 
     print("\nTerrako is waking up...\n")
 
+    # Eye color on wakeup
+    bridge_send('EYE_GREEN')
+
     if incomplete_session:
         wake_prompt = (
             "You just woke up but your last session ended unexpectedly. "
@@ -262,7 +231,7 @@ def chat():
         wake_prompt = "You just woke up. Ask simply who you're talking to."
 
     intro = ollama.chat(
-        model="llama3.1:8b",
+        model="phi3:mini",
         messages=[
             {"role": "system", "content": constitution},
             {"role": "user", "content": wake_prompt}
@@ -272,28 +241,23 @@ def chat():
     print(f"Terrako: {intro_text}\n")
     speak(intro_text)
 
+    # Eye back to blue after greeting
+    bridge_send('EYE_BLUE')
+
     who_is_there = listen(whisper_model)
     if who_is_there:
-        conversation_history.append({
-            "role": "user",
-            "content": who_is_there
-        })
-
+        conversation_history.append({"role": "user", "content": who_is_there})
         greeting = ollama.chat(
-            model="llama3.1:8b",
+            model="phi3:mini",
             messages=[
                 {"role": "system", "content": constitution},
                 {"role": "user", "content": who_is_there},
-                {"role": "assistant", "content": ""},
             ]
         )
         greeting_text = greeting["message"]["content"]
         print(f"Terrako: {greeting_text}\n")
         speak(greeting_text)
-        conversation_history.append({
-            "role": "assistant",
-            "content": greeting_text
-        })
+        conversation_history.append({"role": "assistant", "content": greeting_text})
 
     while True:
         user_input = listen(whisper_model)
@@ -305,43 +269,55 @@ def chat():
         if cleaned in ["quit", "exit", "goodbye", "goodnight", "good night", "bye"]:
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
+            bridge_send('EYE_OFF')
             sleep(conversation_history)
             break
 
+        # Vision triggers
         vision_triggers = [
             "what do you see", "can you see", "look at",
             "what's in front", "describe what", "what do i look like",
             "who is here", "who's there", "what does it look like"
         ]
-
         if any(trigger in user_input.lower() for trigger in vision_triggers):
             print("Terrako is looking...")
+            bridge_send('LOOK_CENTER')
             vision_description = see()
             if vision_description:
                 user_input = f"{user_input} [Terrako looks and sees: {vision_description}]"
 
-        conversation_history.append({
-            "role": "user",
-            "content": user_input
-        })
+        conversation_history.append({"role": "user", "content": user_input})
 
         print("Terrako is thinking...")
+        bridge_send('EYE_RED')  # thinking indicator
+
         response = ollama.chat(
-            model="llama3.1:8b",
-            messages=[
-                {"role": "system", "content": constitution}
-            ] + conversation_history
+            model="phi3:mini",
+            messages=[{"role": "system", "content": constitution}] + conversation_history
         )
-
         terrako_response = response["message"]["content"]
+        conversation_history.append({"role": "assistant", "content": terrako_response})
 
-        conversation_history.append({
-            "role": "assistant",
-            "content": terrako_response
-        })
-
+        bridge_send('EYE_BLUE')  # back to normal
         print(f"\nTerrako: {terrako_response}\n")
         speak(terrako_response)
+
+        # Check battery periodically
+        battery_status = check_battery_time()
+        if battery_status == 'LOW':
+            conversation_history.append({
+                "role": "system",
+                "content": "Your battery is getting low. Mention this naturally to Daniel — suggest charging soon."
+            })
+            bridge_send('EYE_RED')
+            time.sleep(0.5)
+            bridge_send('EYE_BLUE')
+        elif battery_status == 'CRITICAL':
+            conversation_history.append({
+                "role": "system",
+                "content": "Your battery is critically low. Tell Daniel you need to sleep and charge soon."
+            })
+            bridge_send('EYE_RED')
 
 if __name__ == "__main__":
     chat()
