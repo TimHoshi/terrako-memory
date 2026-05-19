@@ -94,7 +94,7 @@ def load_memory(incomplete_session=None):
     constitution = read("core_personality.txt")
     child_profile = read("memory/identity/child_profile.txt")
     relationships = read("memory/identity/relationships.txt")
-    current_thoughts = read("memory/identity/current_thoughts.txt")
+    current_thoughts = read("memory/inner_life/current_thoughts.txt")
 
     incomplete_note = ""
     if incomplete_session:
@@ -130,7 +130,7 @@ def speak(text):
     # Generate audio with piper then convert and play with sox
     piper_cmd = f'echo "{text}" | piper --model {voice_path} --output_raw'
     sox_cmd = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
-    aplay_cmd = 'aplay -r 48000 -f S16_LE -c 2 -D hw:4,0'
+    aplay_cmd = 'aplay -r 48000 -f S16_LE -c 2 -D plughw:2,0'
     
     full_cmd = f'{piper_cmd} | {sox_cmd} | {aplay_cmd}'
     subprocess.run(full_cmd, shell=True)
@@ -145,7 +145,7 @@ def listen(whisper_model):
     audio_chunks = []
     silent_time = 0
 
-    with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16") as stream:
+    with sd.InputStream(samplerate=sample_rate, channels=1, dtype="int16", device=0) as stream:
         while True:
             chunk, _ = stream.read(chunk_samples)
             chunk_array = np.frombuffer(chunk, dtype=np.int16).astype("float32") / 32768.0
