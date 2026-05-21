@@ -224,14 +224,19 @@ def find_camera():
     return 5  # fallback
 
 def chat():
+    print("Loading memory...")
     incomplete_session = check_last_session()
     if incomplete_session:
         print(f"Note: Previous session ended unexpectedly at {incomplete_session}")
         log_battery_incident(incomplete_session)
 
+    print("Building context...")
     constitution = load_memory(incomplete_session)
     conversation_history = []
+    
+    print("Loading Whisper...")
     whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+    print("Whisper ready.")
 
     write_session_flag()
 
