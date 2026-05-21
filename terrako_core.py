@@ -130,7 +130,7 @@ def speak(text):
     # Generate audio with piper then convert and play with sox
     piper_cmd = f'echo "{text}" | piper --model {voice_path} --output_raw'
     sox_cmd = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
-    aplay_cmd = 'aplay -r 48000 -f S16_LE -c 2 -D plughw:2,0'
+    aplay_cmd = 'aplay -r 48000 -f S16_LE -c 2 -D plughw:3,0'
     
     full_cmd = f'{piper_cmd} | {sox_cmd} | {aplay_cmd}'
     subprocess.run(full_cmd, shell=True)
