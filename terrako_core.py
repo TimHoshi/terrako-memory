@@ -122,15 +122,22 @@ FAMILY AND RELATIONSHIPS:
 
 def speak(text):
     import subprocess
-    import tempfile
     import os
 
     voice_path = os.path.join(BASE_DIR, "voices", "en_US-lessac-medium.onnx")
     
-    # Generate audio with piper then convert and play with sox
+    # Find USB speaker device by name
+    result = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
+    device = 'plughw:3,0'  # fallback
+    for line in result.stdout.split('\n'):
+        if 'UACDemo' in line or 'USB Audio' in line:
+            card_num = line.split('card ')[1].split(':')[0]
+            device = f'plughw:{card_num},0'
+            break
+    
     piper_cmd = f'echo "{text}" | piper --model {voice_path} --output_raw'
     sox_cmd = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
-    aplay_cmd = 'aplay -r 48000 -f S16_LE -c 2 -D plughw:3,0'
+    aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device}'
     
     full_cmd = f'{piper_cmd} | {sox_cmd} | {aplay_cmd}'
     subprocess.run(full_cmd, shell=True)
@@ -184,7 +191,7 @@ def listen(whisper_model):
 
 def see(prompt="Describe what you see simply and in your own voice. You are Terrako, a small robot. What is in front of you right now?"):
     try:
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(find_camera())
         if not cap.isOpened():
             return None
         ret, frame = cap.read()
@@ -203,6 +210,18 @@ def see(prompt="Describe what you see simply and in your own voice. You are Terr
         return response["response"]
     except Exception:
         return None
+
+def find_camera():
+    import subprocess
+    result = subprocess.run(['v4l2-ctl', '--list-devices'], 
+                          capture_output=True, text=True)
+    lines = result.stdout.split('\n')
+    for i, line in enumerate(lines):
+        if '8MP USB Camera' in line:
+            for j in range(i+1, len(lines)):
+                if '/dev/video' in lines[j]:
+                    return int(lines[j].strip().replace('/dev/video', ''))
+    return 5  # fallback
 
 def chat():
     incomplete_session = check_last_session()
