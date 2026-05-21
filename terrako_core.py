@@ -170,7 +170,7 @@ def listen(whisper_model):
     audio = np.concatenate(audio_chunks)
     segments, _ = whisper_model.transcribe(
         audio, language="en", vad_filter=True,
-        vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=200, threshold=0.3)
+        vad_parameters=dict(min_silence_duration_ms=500, speech_pad_ms=200, threshold=0.6)
     )
     text = " ".join([s.text for s in segments]).strip()
 
