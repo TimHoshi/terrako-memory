@@ -237,16 +237,17 @@ def speak(text):
 # ── Listening ──
 def listen(whisper_model):
     print("Listening...")
-    sample_rate    = 16000
+    record_rate    = 44100  # device native rate
+    whisper_rate   = 16000  # what Whisper needs
     chunk_duration = 0.5
-    chunk_samples  = int(sample_rate * chunk_duration)
+    chunk_samples  = int(record_rate * chunk_duration)
     max_duration   = 15
     silence_threshold = 2
     audio_chunks   = []
     silent_time    = 0
 
     mic_device = find_microphone()
-    
+
     # Check how many channels the mic supports
     try:
         device_info = sd.query_devices(mic_device)
@@ -254,17 +255,17 @@ def listen(whisper_model):
     except:
         channels = 1
 
-    with sd.InputStream(samplerate=sample_rate, channels=channels,
+    with sd.InputStream(samplerate=record_rate, channels=channels,
                         dtype="int16", device=mic_device) as stream:
         while True:
             chunk, _ = stream.read(chunk_samples)
             chunk_array = np.frombuffer(
                 chunk, dtype=np.int16).astype("float32") / 32768.0
-            
+
             # If stereo mix down to mono
             if channels == 2:
                 chunk_array = chunk_array.reshape(-1, 2).mean(axis=1)
-            
+
             audio_chunks.append(chunk_array)
             if np.abs(chunk_array).mean() < 0.002:
                 silent_time += chunk_duration
@@ -277,8 +278,18 @@ def listen(whisper_model):
                 break
 
     audio = np.concatenate(audio_chunks)
+
+    # Resample from 44100Hz to 16000Hz for Whisper
+    resample_ratio = whisper_rate / record_rate
+    new_length = int(len(audio) * resample_ratio)
+    audio_resampled = np.interp(
+        np.linspace(0, len(audio), new_length),
+        np.arange(len(audio)),
+        audio
+    ).astype(np.float32)
+
     segments, _ = whisper_model.transcribe(
-        audio, language="en", vad_filter=True,
+        audio_resampled, language="en", vad_filter=True,
         vad_parameters=dict(
             min_silence_duration_ms=500,
             speech_pad_ms=200,
