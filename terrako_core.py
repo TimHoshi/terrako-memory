@@ -237,7 +237,7 @@ def speak(text):
 # ── Listening ──
 def listen(whisper_model):
     print("Listening...")
-    record_rate    = 44100  # device native rate
+    record_rate    = 48000  # device native rate
     whisper_rate   = 16000  # what Whisper needs
     chunk_duration = 0.5
     chunk_samples  = int(record_rate * chunk_duration)
