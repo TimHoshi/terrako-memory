@@ -54,18 +54,31 @@ def check_battery_time():
 
 # ── Load Microphone ──
 def find_microphone():
-    """Auto-detect ELP camera microphone device index."""
+    """Auto-detect microphone — prefer USB camera mic, fall back to onboard."""
     try:
         devices = sd.query_devices()
+        # First look for ELP camera mic
         for i, device in enumerate(devices):
-            if ('8MP' in device['name'] or 
+            if ('8MP' in device['name'] or
                 'USB Camera' in device['name'] or
                 'Camera' in device['name']):
                 if device['max_input_channels'] > 0:
-                    print(f"Microphone found: {device['name']} (device {i})")
+                    print(f"Camera mic found: {device['name']} (device {i})")
                     return i
-        print("Camera mic not found — using default input")
-        return None  # use system default
+        # Fall back to onboard mic (rockchip es8388)
+        for i, device in enumerate(devices):
+            if ('rockchip' in device['name'].lower() or 
+                'es8388' in device['name'].lower()):
+                if device['max_input_channels'] > 0:
+                    print(f"Onboard mic found: {device['name']} (device {i})")
+                    return i
+        # Last resort — any input device
+        for i, device in enumerate(devices):
+            if device['max_input_channels'] > 0:
+                print(f"Using mic: {device['name']} (device {i})")
+                return i
+        print("No mic found")
+        return None
     except Exception:
         return None
 
@@ -245,14 +258,26 @@ def listen(whisper_model):
     audio_chunks   = []
     silent_time    = 0
 
-    mic_device = find_microphone()  # auto detect
+    mic_device = find_microphone()
+    
+    # Check how many channels the mic supports
+    try:
+        device_info = sd.query_devices(mic_device)
+        channels = min(device_info['max_input_channels'], 2)
+    except:
+        channels = 1
 
-    with sd.InputStream(samplerate=sample_rate, channels=1,
+    with sd.InputStream(samplerate=sample_rate, channels=channels,
                         dtype="int16", device=mic_device) as stream:
         while True:
             chunk, _ = stream.read(chunk_samples)
             chunk_array = np.frombuffer(
                 chunk, dtype=np.int16).astype("float32") / 32768.0
+            
+            # If stereo mix down to mono
+            if channels == 2:
+                chunk_array = chunk_array.reshape(-1, 2).mean(axis=1)
+            
             audio_chunks.append(chunk_array)
             if np.abs(chunk_array).mean() < 0.002:
                 silent_time += chunk_duration
@@ -294,17 +319,39 @@ def listen(whisper_model):
 
 # ── Vision ──
 def find_camera():
-    result = subprocess.run(
-        ['v4l2-ctl', '--list-devices'],
-        capture_output=True, text=True
-    )
-    lines = result.stdout.split('\n')
-    for i, line in enumerate(lines):
-        if '8MP USB Camera' in line:
-            for j in range(i + 1, len(lines)):
-                if '/dev/video' in lines[j]:
-                    return int(lines[j].strip().replace('/dev/video', ''))
-    return 0
+    """Auto-detect camera — prefer ELP 8MP, fall back to any available camera."""
+    try:
+        result = subprocess.run(
+            ['v4l2-ctl', '--list-devices'],
+            capture_output=True, text=True
+        )
+        lines = result.stdout.split('\n')
+        
+        # First pass — look for ELP 8MP specifically
+        for i, line in enumerate(lines):
+            if '8MP USB Camera' in line:
+                for j in range(i + 1, len(lines)):
+                    if '/dev/video' in lines[j]:
+                        device = int(lines[j].strip().replace('/dev/video', ''))
+                        print(f"ELP camera found: /dev/video{device}")
+                        return device
+
+        # Second pass — any USB camera
+        for i, line in enumerate(lines):
+            if 'USB' in line or 'Camera' in line or 'Video' in line:
+                for j in range(i + 1, len(lines)):
+                    if '/dev/video' in lines[j]:
+                        device = int(lines[j].strip().replace('/dev/video', ''))
+                        print(f"USB camera found: /dev/video{device}")
+                        return device
+
+        # Last resort — try device 0
+        print("No camera found — trying device 0")
+        return 0
+
+    except Exception as e:
+        print(f"Camera detection error: {e}")
+        return 0
 
 def see(prompt="Describe what you see simply and in your own voice. "
                "You are Terrako, a small robot. What is in front of you?"):
