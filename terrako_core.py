@@ -54,13 +54,12 @@ def check_battery_time():
 
 # ── Load Microphone ──
 def find_microphone():
-    """Auto-detect microphone — prefer USB audio input, skip onboard rockchip."""
+    """Auto-detect microphone — skip onboard rockchip, use USB only."""
     try:
         devices = sd.query_devices()
         for i, device in enumerate(devices):
             if device['max_input_channels'] > 0:
                 name = device['name'].lower()
-                # Skip onboard rockchip — doesn't support 16000Hz
                 if 'rockchip' in name or 'es8388' in name:
                     continue
                 print(f"Mic found: {device['name']} (device {i})")
