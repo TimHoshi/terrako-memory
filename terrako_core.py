@@ -137,7 +137,7 @@ def sync_from_github():
         if 'Already up to date' in result.stdout:
             return 'current'
         elif 'Updating' in result.stdout or 'Fast-forward' in result.stdout:
-            save_hashes()  # update hashes after successful pull
+            save_hashes()  # auto update hashes after successful pull
             return 'updated'
         else:
             return 'failed'
