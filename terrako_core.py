@@ -237,23 +237,26 @@ def speak(text):
 # ── Listening ──
 def listen(whisper_model):
     print("Listening...")
-    record_rate    = 48000  # device native rate
-    whisper_rate   = 16000  # what Whisper needs
-    chunk_duration = 0.5
-    chunk_samples  = int(record_rate * chunk_duration)
-    max_duration   = 15
+    whisper_rate      = 16000
+    chunk_duration    = 0.5
     silence_threshold = 2
-    audio_chunks   = []
-    silent_time    = 0
+    audio_chunks      = []
+    silent_time       = 0
 
     mic_device = find_microphone()
 
-    # Check how many channels the mic supports
+    # Auto detect device capabilities
     try:
         device_info = sd.query_devices(mic_device)
-        channels = min(device_info['max_input_channels'], 2)
+        record_rate = int(device_info['default_samplerate'])
+        channels    = min(device_info['max_input_channels'], 2)
+        print(f"Mic: {record_rate}Hz, {channels}ch")
     except:
-        channels = 1
+        record_rate = 44100
+        channels    = 1
+
+    chunk_samples = int(record_rate * chunk_duration)
+    max_duration  = 15
 
     with sd.InputStream(samplerate=record_rate, channels=channels,
                         dtype="int16", device=mic_device) as stream:
@@ -262,7 +265,6 @@ def listen(whisper_model):
             chunk_array = np.frombuffer(
                 chunk, dtype=np.int16).astype("float32") / 32768.0
 
-            # If stereo mix down to mono
             if channels == 2:
                 chunk_array = chunk_array.reshape(-1, 2).mean(axis=1)
 
@@ -279,9 +281,9 @@ def listen(whisper_model):
 
     audio = np.concatenate(audio_chunks)
 
-    # Resample from 44100Hz to 16000Hz for Whisper
+    # Resample to 16000Hz for Whisper
     resample_ratio = whisper_rate / record_rate
-    new_length = int(len(audio) * resample_ratio)
+    new_length     = int(len(audio) * resample_ratio)
     audio_resampled = np.interp(
         np.linspace(0, len(audio), new_length),
         np.arange(len(audio)),
