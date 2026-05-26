@@ -54,30 +54,18 @@ def check_battery_time():
 
 # ── Load Microphone ──
 def find_microphone():
-    """Auto-detect microphone — prefer USB camera mic, fall back to onboard."""
+    """Auto-detect microphone — prefer USB audio input, skip onboard rockchip."""
     try:
         devices = sd.query_devices()
-        # First look for ELP camera mic
-        for i, device in enumerate(devices):
-            if ('8MP' in device['name'] or
-                'USB Camera' in device['name'] or
-                'Camera' in device['name']):
-                if device['max_input_channels'] > 0:
-                    print(f"Camera mic found: {device['name']} (device {i})")
-                    return i
-        # Fall back to onboard mic (rockchip es8388)
-        for i, device in enumerate(devices):
-            if ('rockchip' in device['name'].lower() or 
-                'es8388' in device['name'].lower()):
-                if device['max_input_channels'] > 0:
-                    print(f"Onboard mic found: {device['name']} (device {i})")
-                    return i
-        # Last resort — any input device
         for i, device in enumerate(devices):
             if device['max_input_channels'] > 0:
-                print(f"Using mic: {device['name']} (device {i})")
+                name = device['name'].lower()
+                # Skip onboard rockchip — doesn't support 16000Hz
+                if 'rockchip' in name or 'es8388' in name:
+                    continue
+                print(f"Mic found: {device['name']} (device {i})")
                 return i
-        print("No mic found")
+        print("No compatible mic found")
         return None
     except Exception:
         return None
@@ -243,7 +231,7 @@ def speak(text):
 
     piper_cmd = f'echo "{text}" | piper --model {voice_path} --output_raw'
     sox_cmd   = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
-    aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device}'
+    aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device} --buffer-size=4096'
 
     subprocess.run(f'{piper_cmd} | {sox_cmd} | {aplay_cmd}', shell=True)
 
