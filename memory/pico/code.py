@@ -70,7 +70,7 @@ while True:
             time.sleep(0.5)
             set_color('blue')
         elif cmd == 'SLEEP':
-            set_color('off')
+            sleep_fade()
             serial_send('SLEEPING')
         elif cmd.startswith('SERVO'):
             try:
@@ -81,12 +81,8 @@ while True:
                 serial_send(f'OK {ch} {ang}')
             except Exception as e:
                 serial_send(f'ERROR {e}')
-        elif cmd == 'THINK':
-            while True:
-                think_pulse()
-            time.sleep(0.05)
-            cmd = serial_read()
-        if cmd:
-            break
+    else:
+        # No command — breathe normally
+        breathe()
 
     time.sleep(0.02)
