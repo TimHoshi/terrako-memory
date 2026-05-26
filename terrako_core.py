@@ -18,6 +18,7 @@ BATTERY_CRITICAL_MINS = 80
 _battery_warned = False
 _battery_critical = False
 
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── Pico bridge ──
@@ -230,7 +231,7 @@ def speak(text):
 
     piper_cmd = f'echo "{text}" | piper --model {voice_path} --output_raw'
     sox_cmd   = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
-    aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device} --buffer-size=4096'
+    aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device} --buffer-size=65536 --period-size=16384'
 
     subprocess.run(f'{piper_cmd} | {sox_cmd} | {aplay_cmd}', shell=True)
 
@@ -405,7 +406,7 @@ def chat():
     conversation_history = []
 
     print("Loading Whisper...")
-    whisper_model = WhisperModel("small", device="cpu", compute_type="int8")
+    whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
     print("Whisper ready.")
 
     write_session_flag()
@@ -494,7 +495,7 @@ def chat():
         conversation_history.append({"role": "user", "content": user_input})
 
         print("Terrako is thinking...")
-        bridge_send('EYE_RED')
+        bridge_send('THINK')
 
         response = ollama.chat(
             model="phi3:mini",
