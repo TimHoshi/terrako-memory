@@ -81,8 +81,16 @@ while True:
                 serial_send(f'OK {ch} {ang}')
             except Exception as e:
                 serial_send(f'ERROR {e}')
+        elif cmd == 'THINK':
+            while True:
+                think_pulse()
+                time.sleep(0.05)
+                cmd = serial_read()
+                if cmd:
+                    break
+        elif cmd == 'SLEEP':
+            sleep_fade()
+            serial_send('SLEEPING')
     else:
-        # No command — breathe normally
         breathe()
-
     time.sleep(0.02)
