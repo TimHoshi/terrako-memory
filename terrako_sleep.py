@@ -245,14 +245,27 @@ Do not perform. Only write what is actually true.
 
     # GitHub backup
     try:
-        subprocess.run(["git", "add", "."],
-                      cwd=BASE_DIR, capture_output=True)
-        subprocess.run(["git", "commit", "-m", f"sleep: {date_str}"],
-                      cwd=BASE_DIR, capture_output=True)
-        subprocess.run(["git", "push"],
-                      cwd=BASE_DIR, capture_output=True)
-        print("Memory backed up to GitHub.")
+        result_add = subprocess.run(
+            ["git", "add", "."],
+            cwd=BASE_DIR, capture_output=True, text=True
+        )
+        result_commit = subprocess.run(
+            ["git", "commit", "-m", f"sleep: {date_str}"],
+            cwd=BASE_DIR, capture_output=True, text=True
+        )
+        result_push = subprocess.run(
+            ["git", "push"],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=30
+        )
+        if result_push.returncode == 0:
+            print("Memory backed up to GitHub.")
+        else:
+            print(f"GitHub push failed: {result_push.stderr}")
     except Exception as e:
         print(f"Backup failed: {e}")
 
     print("\nTerrako is asleep.\n")
+
+    # Shutdown Orange Pi to save battery
+    print("Shutting down to preserve battery...")
+    subprocess.run(['shutdown', '-h', 'now'])

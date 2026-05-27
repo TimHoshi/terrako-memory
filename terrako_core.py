@@ -463,12 +463,26 @@ def chat():
             "role": "assistant", "content": greeting_text
         })
 
-    # ── Main loop ──
+# ── Main loop ──
+    last_interaction = time.time()
+    IDLE_TIMEOUT_MINS = 30
+
     while True:
         user_input = listen(whisper_model)
 
         if not user_input:
+            # Check idle timeout
+            idle_mins = (time.time() - last_interaction) / 60
+            if idle_mins > IDLE_TIMEOUT_MINS:
+                print("\nNo one seems to be there. Going to sleep...")
+                speak("It seems no one is there. I'll rest for now.")
+                bridge_send('EYE_OFF')
+                sleep(conversation_history)
+                break
             continue
+
+        # Reset idle timer on any interaction
+        last_interaction = time.time()
 
         cleaned = user_input.lower().strip().rstrip('.,!?')
         if cleaned in ["quit", "exit", "goodbye", "goodnight",
@@ -495,7 +509,7 @@ def chat():
         conversation_history.append({"role": "user", "content": user_input})
 
         print("Terrako is thinking...")
-        bridge_send('THINK')
+        bridge_send('EYE_RED')
 
         response = ollama.chat(
             model="phi3:mini",
@@ -511,6 +525,13 @@ def chat():
         bridge_send('EYE_BLUE')
         print(f"\nTerrako: {terrako_response}\n")
         speak(terrako_response)
+
+        # Periodic reminder to use first person
+        if len(conversation_history) % 10 == 0:
+            conversation_history.append({
+                "role": "system",
+                "content": "Remember: speak in first person only. Use 'I' and 'me', never 'Terrako'."
+            })
 
         # Battery check
         battery_status = check_battery_time()
