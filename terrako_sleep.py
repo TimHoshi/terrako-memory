@@ -296,8 +296,7 @@ Do not perform. Only write what is actually true.
 
     print("\nTerrako is asleep.\n")
 
-# Set wake alarm for 7am
-    set_wake_alarm(hour=7, minute=0)
-    
-    print("Shutting down to preserve battery...")
-    subprocess.run(['shutdown', '-h', 'now'])
+# At end of sleep() instead of shutdown
+print("Stopping Ollama to conserve power...")
+subprocess.run(['pkill', 'ollama'])
+print("\nTerrako is asleep. Will wake at 7am.\n")
