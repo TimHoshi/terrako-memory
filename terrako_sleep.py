@@ -115,6 +115,34 @@ def read_weekly_summaries(n=4):
             combined += file.read()
     return combined.strip()
 
+def set_wake_alarm(hour=7, minute=0):
+    """Set RTC alarm to wake Orange Pi at specified time tomorrow."""
+    from datetime import datetime, timedelta
+    
+    now = datetime.now()
+    wake = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    
+    # If wake time already passed today, set for tomorrow
+    if wake <= now:
+        wake += timedelta(days=1)
+    
+    # Convert to UTC timestamp
+    import calendar
+    timestamp = calendar.timegm(wake.utctimetuple())
+    
+    try:
+        # Clear existing alarm
+        with open('/sys/class/rtc/rtc0/wakealarm', 'w') as f:
+            f.write('0')
+        # Set new alarm
+        with open('/sys/class/rtc/rtc0/wakealarm', 'w') as f:
+            f.write(str(timestamp))
+        print(f"Wake alarm set for {wake.strftime('%I:%M %p')} tomorrow")
+        return True
+    except Exception as e:
+        print(f"Wake alarm failed: {e}")
+        return False
+
 def sleep(conversation_history):
     print("\nTerrako is going to sleep...\n")
 
@@ -266,6 +294,8 @@ Do not perform. Only write what is actually true.
 
     print("\nTerrako is asleep.\n")
 
-    # Shutdown Orange Pi to save battery
+# Set wake alarm for 7am
+    set_wake_alarm(hour=7, minute=0)
+    
     print("Shutting down to preserve battery...")
     subprocess.run(['shutdown', '-h', 'now'])
