@@ -116,8 +116,9 @@ def read_weekly_summaries(n=4):
     return combined.strip()
 
 def set_wake_alarm(hour=7, minute=0):
-    """Set RTC alarm to wake Orange Pi at specified time tomorrow."""
+    """Set RTC alarm to wake Orange Pi at specified time."""
     from datetime import datetime, timedelta
+    import calendar
     
     now = datetime.now()
     wake = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
@@ -127,20 +128,21 @@ def set_wake_alarm(hour=7, minute=0):
         wake += timedelta(days=1)
     
     # Convert to UTC timestamp
-    import calendar
     timestamp = calendar.timegm(wake.utctimetuple())
     
     try:
-        # Clear existing alarm
-        with open('/sys/class/rtc/rtc0/wakealarm', 'w') as f:
-            f.write('0')
-        # Set new alarm
-        with open('/sys/class/rtc/rtc0/wakealarm', 'w') as f:
-            f.write(str(timestamp))
-        print(f"Wake alarm set for {wake.strftime('%I:%M %p')} tomorrow")
-        return True
+        result = subprocess.run(
+            ['rtcwake', '-m', 'no', '-t', str(timestamp)],
+            capture_output=True, text=True
+        )
+        if result.returncode == 0:
+            print(f"Wake alarm set for {wake.strftime('%I:%M %p tomorrow')}")
+            return True
+        else:
+            print(f"Wake alarm failed: {result.stderr}")
+            return False
     except Exception as e:
-        print(f"Wake alarm failed: {e}")
+        print(f"Wake alarm error: {e}")
         return False
 
 def sleep(conversation_history):
