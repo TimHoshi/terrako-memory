@@ -1,6 +1,16 @@
+import sys
+import os
+
+# Force unbuffered output for service logging
+os.environ['PYTHONUNBUFFERED'] = '1'
+sys.stdout.reconfigure(line_buffering=True)
+
+# Suppress ONNX GPU warnings
+os.environ['ORT_LOGGING_LEVEL'] = '3'
+os.environ['ONNXRUNTIME_SUPPRESS_WARNINGS'] = '1'
+
 from terrako_sleep import sleep
 import ollama
-import os
 import subprocess
 import hashlib
 import sounddevice as sd
@@ -10,13 +20,6 @@ from datetime import datetime
 import cv2
 import base64
 import time
-
-# ── Boot time tracking ──
-BOOT_TIME = time.time()
-BATTERY_WARNING_MINS = 60
-BATTERY_CRITICAL_MINS = 80
-_battery_warned = False
-_battery_critical = False
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
