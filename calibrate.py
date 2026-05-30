@@ -2,32 +2,37 @@ import serial
 import time
 
 ser = serial.Serial('/dev/ttyACM0', 115200, timeout=2)
-time.sleep(1)
+time.sleep(2)
 
 print('Sending HELLO...')
-ser.write(b'HELLO\n')
+# Send HELLO multiple times to make sure it gets through
+for _ in range(5):
+    ser.write(b'HELLO\n')
+    time.sleep(0.5)
 
-# Wait for READY
+print('Listening for READY...')
 start = time.time()
+ready = False
 while time.time() - start < 30:
     if ser.in_waiting:
         line = ser.readline().decode().strip()
         if line:
             print(f'Pico: {line}')
             if 'READY' in line:
+                ready = True
                 break
 
+if not ready:
+    print('Pico did not respond - check connection')
+    ser.close()
+    exit()
+
 print('\nCalibration mode!')
-print('Enter: channel angle (e.g. "0 150")')
+print('Enter: channel angle (e.g. "0 90")')
 print('Enter: save — to print final STAND array')
 print('Enter: q — to quit')
 
-current = [150, 90, 90, 90, 90, 45, 50, 120, 90]
-
-# Set current standing position first
-for i, angle in enumerate(current):
-    ser.write(f'SERVO {i} {angle}\n'.encode())
-    time.sleep(0.1)
+current = [90, 90, 90, 90, 90, 90, 90, 90, 90]
 
 while True:
     val = input('> ').strip()
@@ -37,7 +42,7 @@ while True:
     elif val.lower() == 'save':
         print(f'\nFinal STAND array:')
         print(f'STAND = {current}')
-        print('\nCopy this into movement.py on the Pico!')
+        print('\nCopy this into movement.py!')
     else:
         try:
             ch, ang = val.split()
@@ -52,6 +57,6 @@ while True:
                     print(f'Pico: {line}')
             print(f'Channel {ch} → {ang}°')
         except:
-            print('Format: channel angle (e.g. "0 150")')
+            print('Format: channel angle (e.g. "0 90")')
 
 ser.close()
