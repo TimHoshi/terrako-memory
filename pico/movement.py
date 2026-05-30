@@ -114,3 +114,8 @@ def turn_left(duration=0.6, amplitude=25, period=1.0):
         _set(RL_KNEE, STAND[RL_KNEE] + oscillate(30, period, -math.pi/2, t))
         time.sleep(0.02)
     stand()
+
+def release_servos():
+    """Release all servos — let Terrako rest naturally."""
+    for i in range(9):
+        pca.channels[i].duty_cycle = 0

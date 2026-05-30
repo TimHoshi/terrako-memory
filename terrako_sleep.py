@@ -296,6 +296,17 @@ Do not perform. Only write what is actually true.
 
     print("\nTerrako is asleep.\n")
 
+# Before shutdown
+try:
+    import serial
+    ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+    ser.write(b'RELEASE\n')
+    time.sleep(2)
+    ser.close()
+    print("Servos released")
+except:
+    pass
+
 # At end of sleep() instead of shutdown
 print("Stopping Ollama to conserve power...")
 subprocess.run(['pkill', 'ollama'])

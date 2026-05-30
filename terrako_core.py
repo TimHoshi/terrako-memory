@@ -479,22 +479,25 @@ def chat():
             if idle_mins > IDLE_TIMEOUT_MINS:
                 print("\nNo one seems to be there. Going to sleep...")
                 speak("It seems no one is there. I'll rest for now.")
-                bridge_send('EYE_OFF')
+                bridge_send('SLEEP')   # eye fades
+                time.sleep(2)
+                bridge_send('RELEASE') # servos go limp
                 sleep(conversation_history)
                 break
-            continue
 
         # Reset idle timer on any interaction
         last_interaction = time.time()
 
         cleaned = user_input.lower().strip().rstrip('.,!?')
         if cleaned in ["quit", "exit", "goodbye", "goodnight",
-                       "good night", "bye"]:
+               "good night", "bye"]:
             print("\nTerrako: Goodnight. I'll think about today.\n")
             speak("Goodnight. I'll think about today.")
-            bridge_send('EYE_OFF')
+            bridge_send('SLEEP')   # eye fades
+            time.sleep(2)
+            bridge_send('RELEASE') # servos go limp
             sleep(conversation_history)
-            break
+        break
 
         # Vision triggers
         vision_triggers = [

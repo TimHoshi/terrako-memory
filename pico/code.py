@@ -40,7 +40,7 @@ while True:
     time.sleep(0.1)
 
 print("Step 7 - running wakeup")
-wake_up()
+#wake_up()
 
 print("Step 8 - sending READY")
 serial_send('READY')
@@ -91,6 +91,9 @@ while True:
         elif cmd == 'SLEEP':
             sleep_fade()
             serial_send('SLEEPING')
+        elif cmd == 'RELEASE':
+            release_servos()
+            serial_send('RELEASED')
     else:
         breathe()
     time.sleep(0.02)
