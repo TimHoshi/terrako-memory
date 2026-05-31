@@ -3,7 +3,7 @@ import neopixel
 import time
 import math
 
-pixels = neopixel.NeoPixel(board.GP28, 12, brightness=0.3)
+pixels = neopixel.NeoPixel(board.GP28, 8, brightness=0.3)
 
 def test_pixels():
     """Boot test — returns True if NeoPixel responds."""
