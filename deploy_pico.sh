@@ -17,6 +17,7 @@ sleep 1
 ampy --port /dev/ttyACM0 put /root/terrako-memory/pico/code.py /code.py
 ampy --port /dev/ttyACM0 put /root/terrako-memory/pico/leds.py /leds.py
 ampy --port /dev/ttyACM0 put /root/terrako-memory/pico/movement.py /movement.py
+ampy --port /dev/ttyACM0 put /root/terrako-memory/pico/boot.py /boot.py
 
 echo "Pico updated successfully!"
 echo "Pico will auto-reload"

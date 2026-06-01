@@ -3,3 +3,5 @@ vosk-model-small-en-us-0.15/
 __pycache__/
 *.pyc
 .cache/
+memory/state/session_active.txt
+memory/state/file_hashes.txt
