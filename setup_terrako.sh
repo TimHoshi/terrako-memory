@@ -108,6 +108,8 @@ echo "Scripts made executable"
 python3 /root/terrako-memory/update_hashes.py
 echo "Hashes updated"
 
+chmod +x /root/terrako-memory/*.sh
+
 echo ""
 echo "╔════════════════════════════════════════╗"
 echo "║         Setup complete!                ║"
