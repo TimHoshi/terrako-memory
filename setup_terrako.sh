@@ -1,4 +1,3 @@
-cat > /root/setup_terrako.sh << 'SETUP'
 #!/bin/bash
 echo "Setting up Terrako..."
 
@@ -49,6 +48,7 @@ pip3 install \
     opencv-python \
     pyserial \
     soundfile \
+    adafruit-ampy \
     --break-system-packages
 echo "Python packages installed"
 
@@ -83,6 +83,14 @@ cd /root
 git clone git@github.com:TimHoshi/terrako-memory.git
 echo "Terrako cloned from GitHub"
 
+# Download voice model (too large for GitHub)
+mkdir -p /root/terrako-memory/voices
+wget -O /root/terrako-memory/voices/en_US-lessac-medium.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx
+wget -O /root/terrako-memory/voices/en_US-lessac-medium.onnx.json \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json
+echo "Voice model downloaded"
+
 # Set up Pico mount point
 mkdir -p /mnt/pico
 echo "Pico mount point created"
@@ -96,12 +104,14 @@ echo "Audio configured"
 chmod +x /root/terrako-memory/*.sh
 echo "Scripts made executable"
 
+# Update file hashes
+python3 /root/terrako-memory/update_hashes.py
+echo "Hashes updated"
+
 echo ""
 echo "╔════════════════════════════════════════╗"
-echo "║         Setup complete!                 ║"
-echo "║  Run: cd /root/terrako-memory           ║"
-echo "║  Then: ./start_terrako.sh               ║"
+echo "║         Setup complete!                ║"
+echo "║  Run: cd /root/terrako-memory          ║"
+echo "║  Then: ./deploy_pico.sh                ║"
+echo "║  Then: ./start_terrako.sh              ║"
 echo "╚════════════════════════════════════════╝"
-SETUP
-
-chmod +x /root/setup_terrako.sh
