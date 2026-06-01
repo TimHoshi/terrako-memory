@@ -273,7 +273,7 @@ Do not perform. Only write what is actually true.
     clear_session_flag()
     print("Session closed cleanly.")
 
-    # GitHub backup
+   # GitHub backup
     try:
         result_add = subprocess.run(
             ["git", "add", "."],
@@ -294,20 +294,23 @@ Do not perform. Only write what is actually true.
     except Exception as e:
         print(f"Backup failed: {e}")
 
-    print("\nTerrako is asleep.\n")
+    # Release servos
+    try:
+        import serial
+        ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
+        ser.write(b'RELEASE\n')
+        time.sleep(2)
+        ser.close()
+        print("Servos released")
+    except:
+        pass
 
-# Before shutdown
-try:
-    import serial
-    ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
-    ser.write(b'RELEASE\n')
-    time.sleep(2)
-    ser.close()
-    print("Servos released")
-except:
-    pass
+    # Stop Ollama to conserve power
+    print("Stopping Ollama to conserve power...")
+    subprocess.run(['pkill', 'ollama'])
 
-# At end of sleep() instead of shutdown
-print("Stopping Ollama to conserve power...")
-subprocess.run(['pkill', 'ollama'])
-print("\nTerrako is asleep. Will wake at 7am.\n")
+    print("\nTerrako is asleep. Will wake at 7am.\n")
+
+    # Shutdown to preserve battery
+    print("Shutting down to preserve battery...")
+    subprocess.run(['shutdown', '-h', 'now'])
