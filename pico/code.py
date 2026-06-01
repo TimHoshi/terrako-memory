@@ -5,11 +5,17 @@ import supervisor
 print("Step 1 - basic imports done")
 
 from leds import test_pixels, startup_sequence
-from leds import set_color, breathe
+from leds import set_color, breathe, think_pulse, sleep_fade
 print("Step 2 - leds imported")
 
-from movement import wake_up, stand, servos
-print("Step 3 - movement imported")
+try:
+    from movement import wake_up, stand, servos
+    movement_ok = True
+    print("Step 3 - movement imported")
+except Exception as e:
+    movement_ok = False
+    servos = [None] * 9
+    print(f"Step 3 - movement FAILED: {e}")
 
 print("Step 4 - sensor skipped")
 
@@ -33,14 +39,22 @@ else:
 
 print("Step 6 - waiting for Orange Pi HELLO")
 set_color('orange')
+idle_count = 0
 while True:
     cmd = serial_read()
     if cmd == 'HELLO':
         break
     time.sleep(0.1)
+    idle_count += 1
+    if idle_count >= 300:  # every 30 seconds
+        serial_send('WAITING')
+        idle_count = 0
 
 print("Step 7 - running wakeup")
-#wake_up()
+if movement_ok:
+    wake_up()
+else:
+    print("Step 7 - skipping wakeup, movement not available")
 
 print("Step 8 - sending READY")
 serial_send('READY')
@@ -54,9 +68,11 @@ while True:
 
     if cmd:
         if cmd == 'STOP':
-            stand()
+            if movement_ok:
+                stand()
         elif cmd == 'STAND':
-            stand()
+            if movement_ok:
+                stand()
         elif cmd == 'EYE_RED':
             set_color('red')
         elif cmd == 'EYE_BLUE':
@@ -69,18 +85,6 @@ while True:
             set_color('green')
             time.sleep(0.5)
             set_color('blue')
-        elif cmd == 'SLEEP':
-            sleep_fade()
-            serial_send('SLEEPING')
-        elif cmd.startswith('SERVO'):
-            try:
-                parts = cmd.split()
-                ch = int(parts[1])
-                ang = int(parts[2])
-                servos[ch].angle = max(0, min(180, ang))
-                serial_send(f'OK {ch} {ang}')
-            except Exception as e:
-                serial_send(f'ERROR {e}')
         elif cmd == 'THINK':
             while True:
                 think_pulse()
@@ -92,8 +96,24 @@ while True:
             sleep_fade()
             serial_send('SLEEPING')
         elif cmd == 'RELEASE':
-            release_servos()
+            if movement_ok and any(s is not None for s in servos):
+                from movement import pca
+                for i in range(9):
+                    pca.channels[i].duty_cycle = 0
             serial_send('RELEASED')
+        elif cmd.startswith('SERVO'):
+            try:
+                parts = cmd.split()
+                ch = int(parts[1])
+                ang = int(parts[2])
+                if servos[ch] is not None:
+                    servos[ch].angle = max(0, min(180, ang))
+                    serial_send(f'OK {ch} {ang}')
+                else:
+                    serial_send(f'ERROR servo {ch} not available')
+            except Exception as e:
+                serial_send(f'ERROR {e}')
     else:
         breathe()
+
     time.sleep(0.02)
