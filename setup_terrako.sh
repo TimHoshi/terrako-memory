@@ -36,7 +36,8 @@ apt update && apt install -y \
     curl \
     wget \
     htop \
-    nano
+    nano \
+    zstd
 echo "System packages installed"
 
 # Python packages
