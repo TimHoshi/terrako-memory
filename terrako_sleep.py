@@ -305,10 +305,6 @@ Do not perform. Only write what is actually true.
     except:
         pass
 
-    # Stop Ollama to conserve power
-    print("Stopping Ollama to conserve power...")
-    subprocess.run(['pkill', 'ollama'])
-
     print("\nTerrako is asleep. Will wake at 7am.\n")
 
     # Shutdown to preserve battery
