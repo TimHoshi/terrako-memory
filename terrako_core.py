@@ -582,4 +582,18 @@ def chat():
             bridge_send('EYE_RED')
 
 if __name__ == "__main__":
-    chat()
+    try:
+        chat()
+    except KeyboardInterrupt:
+        print("\nTerrako stopped by user")
+        bridge_send('EYE_OFF')
+        bridge_send('RELEASE')
+    except Exception as e:
+        import traceback
+        print(f"\nTerrako crashed: {e}")
+        traceback.print_exc()
+        bridge_send('EYE_RED')
+        # Save crash log
+        with open('/root/terrako-memory/memory/state/crash.log', 'a') as f:
+            f.write(f"\n[{datetime.now()}] CRASH: {e}\n")
+            traceback.print_exc(file=f)
