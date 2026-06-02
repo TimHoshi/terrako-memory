@@ -220,15 +220,11 @@ BOOT CONTEXT:
 """
 
 def speak(text):
-    import subprocess
-    import os
+    import subprocess, os, tempfile
 
-    # Clean text for shell safety
     safe_text = text.replace('"', "'").replace('`', "'").replace('\\', '')
-
     voice_path = os.path.join(BASE_DIR, "voices", "en_US-lessac-medium.onnx")
 
-    # Find USB speaker
     result = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
     device = 'plughw:3,0'
     for line in result.stdout.split('\n'):
@@ -237,11 +233,32 @@ def speak(text):
             device = f'plughw:{card_num},0'
             break
 
-    piper_cmd = f'echo "{safe_text}" | piper --model {voice_path} --output_raw'
-    sox_cmd = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
-    aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device} --buffer-size=65536 --period-size=16384'
+    # Generate to temp file first then play — no pipeline timing issues
+    tmp_raw = '/tmp/terrako_speech.raw'
+    tmp_wav = '/tmp/terrako_speech.wav'
 
-    subprocess.run(f'{piper_cmd} | {sox_cmd} | {aplay_cmd}', shell=True)
+    # Generate raw audio
+    subprocess.run(
+        f'echo "{safe_text}" | piper --model {voice_path} --output_raw > {tmp_raw}',
+        shell=True
+    )
+
+    # Convert to wav
+    subprocess.run(
+        f'sox -t raw -r 22050 -e signed -b 16 -c 1 {tmp_raw} '
+        f'-t wav -r 48000 -e signed -b 16 -c 2 {tmp_wav}',
+        shell=True
+    )
+
+    # Play wav file — most reliable method
+    subprocess.run(f'aplay -D {device} {tmp_wav}', shell=True)
+
+    # Cleanup
+    try:
+        os.remove(tmp_raw)
+        os.remove(tmp_wav)
+    except:
+        pass
 
 # ── Listening ──
 def listen(whisper_model):
@@ -504,7 +521,7 @@ def chat():
             sleep(conversation_history)
         break
 
-        # Vision triggers
+# Vision triggers
         vision_triggers = [
             "what do you see", "can you see", "look at",
             "what's in front", "describe what", "what do i look like",
@@ -521,9 +538,9 @@ def chat():
 
         print("Terrako is thinking...")
         bridge_send('THINK')
-        time.sleep(0.3)  # give Pico time to start animation
+        time.sleep(0.3)
 
-response = ollama.chat(
+        response = ollama.chat(
             model="phi3:mini",
             messages=[
                 {"role": "system", "content": constitution}
