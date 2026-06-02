@@ -27,15 +27,33 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # ── Pico bridge ──
 try:
     import serial
-    _pico = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
-    time.sleep(1)
-    _pico.write(b'HELLO\n')
-    bridge_available = True
-    print("Pico bridge connected")
+    port = find_pico()
+    if port:
+        _pico = serial.Serial(port, 115200, timeout=1)
+        time.sleep(1)
+        _pico.write(b'HELLO\n')
+        bridge_available = True
+        print(f"Pico bridge connected on {port}")
+    else:
+        raise Exception("No Pico found")
 except Exception:
     _pico = None
     bridge_available = False
     print("Pico bridge not available — running without body")
+
+def find_pico():
+    """Auto-detect Pico serial port."""
+    import glob
+    # Check common ports
+    for port in ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2']:
+        try:
+            import os
+            if os.path.exists(port):
+                print(f"Pico found: {port}")
+                return port
+        except:
+            pass
+    return None
 
 def bridge_send(cmd):
     if bridge_available and _pico:
