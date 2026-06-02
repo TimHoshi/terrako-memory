@@ -20,8 +20,8 @@ except Exception as e:
 
 sleep 2
 
-# Start Ollama via systemd
-systemctl start ollama
+# Restart Ollama cleanly via systemd
+systemctl restart ollama
 sleep 8
 
 # Verify Ollama is running
@@ -40,3 +40,4 @@ python3 terrako_core.py
 EOF
 
 chmod +x /root/terrako-memory/start_terrako.sh
+./start_terrako.sh
