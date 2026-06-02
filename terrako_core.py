@@ -521,8 +521,9 @@ def chat():
 
         print("Terrako is thinking...")
         bridge_send('THINK')
+        time.sleep(0.3)  # give Pico time to start animation
 
-        response = ollama.chat(
+response = ollama.chat(
             model="phi3:mini",
             messages=[
                 {"role": "system", "content": constitution}
