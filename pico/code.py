@@ -92,6 +92,9 @@ while True:
                 cmd = serial_read()
                 if cmd:
                     break
+                # Timeout after 60 seconds — return to normal
+                if time.monotonic() - think_start > 60:
+                    break
         elif cmd == 'SLEEP':
             sleep_fade()
             serial_send('SLEEPING')

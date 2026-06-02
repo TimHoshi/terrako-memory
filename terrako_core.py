@@ -537,8 +537,7 @@ def chat():
         conversation_history.append({"role": "user", "content": user_input})
 
         print("Terrako is thinking...")
-        bridge_send('THINK')
-        time.sleep(0.3)
+        bridge_send('EYE_RED')
 
         response = ollama.chat(
             model="phi3:mini",

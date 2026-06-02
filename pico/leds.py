@@ -62,9 +62,7 @@ def sleep_fade():
     pixels.fill((0, 0, 0))
 
 def think_pulse():
-    """Slow amber pulse while Terrako is thinking."""
+    """Slow white pulse while Terrako is thinking."""
     t = time.monotonic()
-    b = int(60 + 40 * math.sin(2 * math.pi * t / 2.0))
-    r = b
-    g = int(b * 0.4)
-    pixels.fill((r, g, 0))
+    b = int(40 + 30 * math.sin(2 * math.pi * t / 2.0))
+    pixels.fill((b, b, b))  # white pulse
