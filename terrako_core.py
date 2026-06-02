@@ -221,6 +221,9 @@ BOOT CONTEXT:
 
 # ── Speaking ──
 def speak(text):
+    # Clean text for shell safety
+    text = text.replace('"', "'").replace('`', "'").replace('\\', '')
+    
     voice_path = os.path.join(BASE_DIR, "voices", "en_US-lessac-medium.onnx")
 
     # Find USB speaker
