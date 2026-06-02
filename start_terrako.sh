@@ -8,9 +8,9 @@ python3 -c "
 import serial, time
 try:
     ser = serial.Serial('/dev/ttyACM0', 115200, timeout=1)
-    ser.write(b'\x03\x03')  # Ctrl+C
+    ser.write(b'\x03\x03')
     time.sleep(0.5)
-    ser.write(b'\x04')      # Ctrl+D reboot
+    ser.write(b'\x04')
     time.sleep(3)
     ser.close()
     print('Pico reset')
@@ -20,16 +20,12 @@ except Exception as e:
 
 sleep 2
 
-# Kill any existing Ollama instances
-pkill ollama 2>/dev/null
-sleep 2
-
-# Start Ollama fresh
-ollama serve &
+# Start Ollama via systemd
+systemctl start ollama
 sleep 8
 
 # Verify Ollama is running
-if ! pgrep ollama > /dev/null; then
+if ! systemctl is-active --quiet ollama; then
     echo "Ollama failed to start!"
     exit 1
 fi
