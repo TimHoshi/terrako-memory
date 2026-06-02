@@ -219,11 +219,13 @@ BOOT CONTEXT:
 {boot_context}
 """
 
-# ── Speaking ──
 def speak(text):
+    import subprocess
+    import os
+
     # Clean text for shell safety
-    text = text.replace('"', "'").replace('`', "'").replace('\\', '')
-    
+    safe_text = text.replace('"', "'").replace('`', "'").replace('\\', '')
+
     voice_path = os.path.join(BASE_DIR, "voices", "en_US-lessac-medium.onnx")
 
     # Find USB speaker
@@ -235,8 +237,8 @@ def speak(text):
             device = f'plughw:{card_num},0'
             break
 
-    piper_cmd = f'echo "{text}" | piper --model {voice_path} --output_raw'
-    sox_cmd   = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
+    piper_cmd = f'echo "{safe_text}" | piper --model {voice_path} --output_raw'
+    sox_cmd = 'sox -t raw -r 22050 -e signed -b 16 -c 1 - -t raw -r 48000 -e signed -b 16 -c 2 -'
     aplay_cmd = f'aplay -r 48000 -f S16_LE -c 2 -D {device} --buffer-size=65536 --period-size=16384'
 
     subprocess.run(f'{piper_cmd} | {sox_cmd} | {aplay_cmd}', shell=True)
