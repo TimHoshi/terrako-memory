@@ -74,7 +74,7 @@ Keep your summary to one short paragraph. No more.
 """
 
     response = ollama.chat(
-        model="phi3:mini",
+        model="terrako",
         messages=[
             {"role": "user", "content": consolidation_prompt}
         ]
@@ -168,7 +168,7 @@ Keep your reflection to one short paragraph. No bullet points. No headers.
 """
 
     response = ollama.chat(
-        model="phi3:mini",
+        model="terrako",
         messages=[
             {"role": "user", "content": reflection_prompt}
         ]
@@ -183,7 +183,7 @@ Keep your reflection to one short paragraph. No bullet points. No headers.
     print(f"Daily log saved: {date_str}-{time_str}.txt")
 
     thoughts_response = ollama.chat(
-        model="phi3:mini",
+        model="terrako",
         messages=[
             {"role": "user", "content": f"{reflection_prompt}\n\nIn one sentence only, what are you still thinking about as you go to sleep? One sentence. No more."}
         ]
@@ -196,7 +196,7 @@ Keep your reflection to one short paragraph. No bullet points. No headers.
     print("Current thoughts updated.")
 
     significance_response = ollama.chat(
-        model="phi3:mini",
+        model="terrako",
         messages=[
             {"role": "user", "content": f"{reflection_prompt}\n\nIn two sentences maximum, was there a single moment today you never want to forget? If no, say only: nothing today"}
         ]
@@ -235,7 +235,7 @@ Do not perform. Only write what is actually true.
 """
 
     emotional_response = ollama.chat(
-        model="phi3:mini",
+        model="terrako",
         messages=[
             {"role": "user", "content": emotional_prompt}
         ]

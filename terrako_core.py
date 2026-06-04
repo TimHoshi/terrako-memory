@@ -476,8 +476,12 @@ def chat():
     else:
         wake_prompt = "You just woke up. Ask simply who you're talking to."
 
+# Limit conversation history to prevent RAM overflow
+if len(conversation_history) > 20:
+    conversation_history = conversation_history[-20:]
+
     intro = ollama.chat(
-        model="phi3:mini",
+        model="terrako",
         messages=[
             {"role": "system", "content": constitution},
             {"role": "user",   "content": wake_prompt}
@@ -493,7 +497,7 @@ def chat():
     if who_is_there:
         conversation_history.append({"role": "user", "content": who_is_there})
         greeting = ollama.chat(
-            model="phi3:mini",
+            model="terrako",
             messages=[
                 {"role": "system", "content": constitution},
                 {"role": "user",   "content": who_is_there},
@@ -558,7 +562,7 @@ def chat():
         bridge_send('THINK')
 
         response = ollama.chat(
-            model="phi3:mini",
+            model="terrako",
             messages=[
                 {"role": "system", "content": constitution}
             ] + conversation_history
