@@ -1,4 +1,3 @@
-cat > /root/terrako-memory/start_terrako.sh << 'EOF'
 #!/bin/bash
 echo "Starting Terrako..."
 
@@ -37,7 +36,3 @@ rm -f /root/terrako-memory/memory/state/session_active.txt
 # Start Terrako
 cd /root/terrako-memory
 python3 terrako_core.py
-EOF
-
-chmod +x /root/terrako-memory/start_terrako.sh
-./start_terrako.sh
