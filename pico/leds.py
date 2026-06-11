@@ -65,4 +65,5 @@ def think_pulse():
     """Slow white pulse while Terrako is thinking."""
     t = time.monotonic()
     b = int(40 + 30 * math.sin(2 * math.pi * t / 2.0))
-    pixels.fill((b, b, b))  # white pulse
+    pixels.fill((b, b, b))
+    pixels.show()

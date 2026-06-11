@@ -86,15 +86,24 @@ while True:
             time.sleep(0.5)
             set_color('blue')
         elif cmd == 'THINK':
+            think_start = time.monotonic()
             while True:
                 think_pulse()
-                time.sleep(0.05)
-                cmd = serial_read()
-                if cmd:
-                    break
-                # Timeout after 60 seconds — return to normal
+                # Check for next command
+                if supervisor.runtime.serial_bytes_available:
+                    cmd = sys.stdin.readline().strip()
+                    if cmd:
+                        break
+                # Safety timeout after 60 seconds
                 if time.monotonic() - think_start > 60:
                     break
+                # Process the breaking command
+                if cmd == 'EYE_BLUE':
+                    set_color('blue')
+                elif cmd == 'EYE_GREEN':
+                    set_color('green')
+                elif cmd == 'EYE_OFF':
+                    set_color('off')
         elif cmd == 'SLEEP':
             sleep_fade()
             serial_send('SLEEPING')
