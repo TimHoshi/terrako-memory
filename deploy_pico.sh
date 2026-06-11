@@ -1,4 +1,3 @@
-cat > /root/terrako-memory/deploy_pico.sh << 'EOF'
 #!/bin/bash
 echo "Deploying to Pico..."
 
@@ -40,6 +39,3 @@ ampy --port $PICO_PORT put /root/terrako-memory/pico/movement.py /movement.py
 
 echo "Pico updated successfully!"
 echo "Pico will auto-reload"
-EOF
-
-chmod +x /root/terrako-memory/deploy_pico.sh
