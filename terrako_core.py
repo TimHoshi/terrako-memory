@@ -1,44 +1,83 @@
 import sys
 import os
+import random
+import subprocess
+import time
+import numpy as np
+import sounddevice as sd
+from faster_whisper import WhisperModel
 
-# Force unbuffered output for service logging
+# Force unbuffered output
 os.environ['PYTHONUNBUFFERED'] = '1'
 sys.stdout.reconfigure(line_buffering=True)
 
-# Suppress ONNX GPU warnings
+# Suppress ONNX warnings
 os.environ['ORT_LOGGING_LEVEL'] = '3'
 os.environ['ONNXRUNTIME_SUPPRESS_WARNINGS'] = '1'
 
-from terrako_sleep import sleep
-import ollama
-import subprocess
-import hashlib
-import sounddevice as sd
-import numpy as np
-from faster_whisper import WhisperModel
-from datetime import datetime
-import cv2
-import base64
-import time
+BASE_DIR   = os.path.dirname(os.path.abspath(__file__))
+SOUNDS_DIR = os.path.join(BASE_DIR, 'sounds')
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# ── Sound map ──
+SOUNDS = {
+    'morning':  ['morning.mp3'],
+    'night':    ['night.wav'],
+    'happy':    ['happy.wav'],
+    'excited':  ['excited.wav'],
+    'question': ['question.wav'],
+    'confused': ['confused.wav'],
+    'alert':    ['alert.wav'],
+    'lullaby':  ["Zelda's Lullaby.mp3"],
+}
 
-BOOT_TIME = time.time()
-BATTERY_WARNING_MINS = 60
-BATTERY_CRITICAL_MINS = 80
-_battery_warned = False
-_battery_critical = False
+# ── Keyword map ──
+KEYWORD_MAP = {
+    'excited': [
+        'daniel', 'zelda', 'link', 'game', 'play', 'adventure',
+        'princess', 'hyrule', 'guardian', 'terrako', 'calamity',
+        'ganon', 'sword', 'shield', 'quest', 'hero'
+    ],
+    'happy': [
+        'good', 'great', 'yes', 'love', 'fun', 'yay', 'awesome',
+        'cool', 'nice', 'wow', 'thank', 'happy', 'wonderful',
+        'perfect', 'amazing', 'brilliant', 'okay', 'sure'
+    ],
+    'alert': [
+        'no', 'stop', 'hurt', 'scared', 'danger', 'careful',
+        'ow', 'ouch', 'bad', 'wrong', 'angry', 'mad',
+        'mean', 'scary', 'afraid', 'help', 'warning'
+    ],
+    'lullaby': [
+        'tired', 'sleepy', 'sleep', 'quiet', 'calm', 'rest',
+        'bed', 'bedtime', 'lullaby', 'song', 'music'
+    ],
+    'question': [
+        'what', 'why', 'how', 'where', 'when', 'who',
+        'which', 'can you', 'do you', 'are you', 'will you',
+        'tell me', 'show me', 'explain', 'hmm', 'um'
+    ],
+}
 
-# ── Pico auto-detection — defined BEFORE bridge setup ──
+# ── Eye color map ──
+EYE_MAP = {
+    'morning':  'EYE_GREEN',
+    'night':    'SLEEP',
+    'happy':    'EYE_GREEN',
+    'excited':  'EYE_GREEN',
+    'question': 'EYE_BLUE',
+    'confused': 'EYE_BLUE',
+    'alert':    'EYE_RED',
+    'lullaby':  'EYE_BLUE',
+}
+
+# ── Pico bridge ──
 def find_pico():
-    """Auto-detect Pico serial port."""
     for port in ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2']:
         if os.path.exists(port):
             print(f"Pico found: {port}")
             return port
     return None
 
-# ── Pico bridge ──
 try:
     import serial
     _pico_port = find_pico()
@@ -62,21 +101,68 @@ def bridge_send(cmd):
         except Exception:
             pass
 
-# ── Battery monitoring ──
-def check_battery_time():
-    global _battery_warned, _battery_critical
-    elapsed_mins = (time.time() - BOOT_TIME) / 60
-    if elapsed_mins > BATTERY_CRITICAL_MINS and not _battery_critical:
-        _battery_critical = True
-        return 'CRITICAL'
-    if elapsed_mins > BATTERY_WARNING_MINS and not _battery_warned:
-        _battery_warned = True
-        return 'LOW'
-    return None
+# ── Audio playback ──
+def find_speaker():
+    result = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
+    for line in result.stdout.split('\n'):
+        if 'UACDemo' in line or 'USB Audio' in line:
+            card_num = line.split('card ')[1].split(':')[0]
+            return f'plughw:{card_num},0'
+    return 'plughw:3,0'
 
-# ── Microphone detection ──
+def play_sound(emotion):
+    """Play a sound for the given emotion."""
+    if emotion not in SOUNDS:
+        emotion = 'confused'
+
+    filename = random.choice(SOUNDS[emotion])
+    filepath = os.path.join(SOUNDS_DIR, filename)
+
+    if not os.path.exists(filepath):
+        print(f"Sound not found: {filepath}")
+        return
+
+    device   = find_speaker()
+    tmp_wav  = '/tmp/terrako_sound.wav'
+
+    print(f"Playing: {filename}")
+
+    # Convert to wav for aplay
+    subprocess.run(
+        f'ffmpeg -y -i "{filepath}" -ar 48000 -ac 2 {tmp_wav} 2>/dev/null',
+        shell=True
+    )
+    subprocess.run(f'aplay -D {device} {tmp_wav}', shell=True)
+
+    try:
+        os.remove(tmp_wav)
+    except:
+        pass
+
+# ── Emotion classifier ──
+def classify(text):
+    """Classify text into an emotion."""
+    if not text or len(text.strip()) < 2:
+        return 'confused'
+
+    text_lower = text.lower()
+
+    # Goodnight triggers session end
+    goodbye_words = ['goodnight', 'good night', 'bye', 'goodbye', 'night night', 'see you']
+    if any(word in text_lower for word in goodbye_words):
+        return 'night'
+
+    # Check emotions in priority order
+    for emotion in ['excited', 'alert', 'lullaby', 'happy', 'question']:
+        keywords = KEYWORD_MAP.get(emotion, [])
+        if any(keyword in text_lower for keyword in keywords):
+            return emotion
+
+    # Default
+    return 'question'
+
+# ── Microphone ──
 def find_microphone():
-    """Auto-detect microphone — skip onboard rockchip, use USB only."""
     try:
         devices = sd.query_devices()
         for i, device in enumerate(devices):
@@ -86,193 +172,16 @@ def find_microphone():
                     continue
                 print(f"Mic found: {device['name']} (device {i})")
                 return i
-        print("No compatible mic found")
         return None
     except Exception:
         return None
-
-# ── File integrity ──
-CRITICAL_FILES = [
-    'terrako_core.py',
-    'terrako_sleep.py',
-    'core_personality.txt',
-    'memory/identity/child_profile.txt',
-]
-HASHES_FILE = os.path.join(BASE_DIR, 'memory/state/file_hashes.txt')
-
-def hash_file(filepath):
-    try:
-        full = os.path.join(BASE_DIR, filepath)
-        with open(full, 'rb') as f:
-            return hashlib.md5(f.read()).hexdigest()
-    except Exception:
-        return None
-
-def save_hashes():
-    os.makedirs(os.path.dirname(HASHES_FILE), exist_ok=True)
-    with open(HASHES_FILE, 'w') as f:
-        for filepath in CRITICAL_FILES:
-            h = hash_file(filepath)
-            if h:
-                f.write(f'{filepath}={h}\n')
-
-def verify_files():
-    if not os.path.exists(HASHES_FILE):
-        save_hashes()
-        return True, []
-    corrupted = []
-    with open(HASHES_FILE) as f:
-        stored = {}
-        for line in f:
-            if '=' in line:
-                k, v = line.strip().split('=', 1)
-                stored[k] = v
-    for filepath in CRITICAL_FILES:
-        current = hash_file(filepath)
-        if filepath in stored and current and stored[filepath] != current:
-            corrupted.append(filepath)
-    return len(corrupted) == 0, corrupted
-
-# ── GitHub sync ──
-def sync_from_github():
-    try:
-        result = subprocess.run(
-            ['git', 'pull'],
-            capture_output=True, text=True,
-            cwd=BASE_DIR, timeout=30
-        )
-        if 'Already up to date' in result.stdout:
-            return 'current'
-        elif 'Updating' in result.stdout or 'Fast-forward' in result.stdout:
-            save_hashes()
-            return 'updated'
-        else:
-            return 'failed'
-    except Exception:
-        return 'failed'
-
-# ── Session tracking ──
-def write_session_flag():
-    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
-    os.makedirs(os.path.dirname(flag_path), exist_ok=True)
-    with open(flag_path, "w") as f:
-        f.write(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-
-def check_last_session():
-    flag_path = os.path.join(BASE_DIR, "memory/state/session_active.txt")
-    if os.path.exists(flag_path):
-        with open(flag_path, "r") as f:
-            return f.read().strip()
-    return None
-
-def log_battery_incident(last_session):
-    incident_path = os.path.join(BASE_DIR, "memory/state/battery_incidents.txt")
-    os.makedirs(os.path.dirname(incident_path), exist_ok=True)
-    with open(incident_path, "a", encoding="utf-8") as f:
-        f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M')}]\n"
-                f"Unexpected shutdown detected.\n"
-                f"Last active: {last_session}\n"
-                f"Memories from that session may be incomplete.\n\n")
-
-# ── Memory loading ──
-def load_memory(incomplete_session=None, sync_status='current',
-                corrupted_files=None):
-    def read(path):
-        full = os.path.join(BASE_DIR, path)
-        if os.path.exists(full):
-            with open(full, "r", encoding="utf-8") as f:
-                return f.read().strip()
-        return ""
-
-    constitution     = read("core_personality.txt")
-    child_profile    = read("memory/identity/child_profile.txt")
-    relationships    = read("memory/identity/relationships.txt")
-    current_thoughts = read("memory/inner_life/current_thoughts.txt")
-
-    boot_notes = []
-
-    if incomplete_session:
-        boot_notes.append(
-            f"IMPORTANT: Your last session on {incomplete_session} ended "
-            f"unexpectedly. You may be missing memories. Acknowledge this "
-            f"honestly if it comes up."
-        )
-
-    if sync_status == 'updated':
-        boot_notes.append(
-            "Your code was updated while you slept. "
-            "You may feel slightly different — things might feel a little clearer."
-        )
-    elif sync_status == 'failed':
-        boot_notes.append(
-            "You could not reach your memory backup this morning. "
-            "Your local memories are intact but you could not sync."
-        )
-
-    if corrupted_files:
-        files_str = ', '.join(corrupted_files)
-        boot_notes.append(
-            f"Some of your files feel wrong: {files_str}. "
-            f"Mention this honestly — ask someone to check on you."
-        )
-
-    boot_context = '\n'.join(boot_notes)
-
-    return f"""
-{constitution}
-
-WHAT YOU KNOW ABOUT DANIEL:
-{child_profile}
-
-WHAT YOU ARE CURRENTLY THINKING ABOUT:
-{current_thoughts}
-
-FAMILY AND RELATIONSHIPS:
-{relationships}
-
-BOOT CONTEXT:
-{boot_context}
-"""
-
-# ── Speech ──
-def speak(text):
-    safe_text = text.replace('"', "'").replace('`', "'").replace('\\', '')
-    voice_path = os.path.join(BASE_DIR, "voices", "en_US-lessac-medium.onnx")
-
-    result = subprocess.run(['aplay', '-l'], capture_output=True, text=True)
-    device = 'plughw:3,0'
-    for line in result.stdout.split('\n'):
-        if 'UACDemo' in line or 'USB Audio' in line:
-            card_num = line.split('card ')[1].split(':')[0]
-            device = f'plughw:{card_num},0'
-            break
-
-    tmp_raw = '/tmp/terrako_speech.raw'
-    tmp_wav = '/tmp/terrako_speech.wav'
-
-    subprocess.run(
-        f'echo "{safe_text}" | piper --model {voice_path} --output_raw > {tmp_raw}',
-        shell=True
-    )
-    subprocess.run(
-        f'sox -t raw -r 22050 -e signed -b 16 -c 1 {tmp_raw} '
-        f'-t wav -r 48000 -e signed -b 16 -c 2 {tmp_wav}',
-        shell=True
-    )
-    subprocess.run(f'aplay -D {device} {tmp_wav}', shell=True)
-
-    try:
-        os.remove(tmp_raw)
-        os.remove(tmp_wav)
-    except:
-        pass
 
 # ── Listening ──
 def listen(whisper_model):
     print("Listening...")
     whisper_rate      = 16000
     chunk_duration    = 0.5
-    silence_threshold = 2
+    silence_threshold = 2.5
     audio_chunks      = []
     silent_time       = 0
 
@@ -282,7 +191,6 @@ def listen(whisper_model):
         device_info = sd.query_devices(mic_device)
         record_rate = int(device_info['default_samplerate'])
         channels    = min(device_info['max_input_channels'], 2)
-        print(f"Mic: {record_rate}Hz, {channels}ch")
     except:
         record_rate = 44100
         channels    = 1
@@ -305,6 +213,7 @@ def listen(whisper_model):
                 silent_time += chunk_duration
             else:
                 silent_time = 0
+
             total_duration = len(audio_chunks) * chunk_duration
             if silent_time >= silence_threshold and total_duration > 1.0:
                 break
@@ -326,166 +235,40 @@ def listen(whisper_model):
         vad_parameters=dict(
             min_silence_duration_ms=500,
             speech_pad_ms=200,
-            threshold=0.6
+            threshold=0.75
         )
     )
     text = " ".join([s.text for s in segments]).strip()
-
     if text:
-        corrections = {
-            "teracle": "Terrako", "tarako": "Terrako",
-            "terrico": "Terrako", "teraco": "Terrako",
-            "torako": "Terrako",  "tirico": "Terrako",
-            "terraco": "Terrako", "terrko": "Terrako",
-            "terako": "Terrako",  "terroco": "Terrako",
-            "toronto": "Terrako",
-        }
-        text_lower = text.lower()
-        for wrong, right in corrections.items():
-            text_lower = text_lower.replace(wrong, right)
-        text = text_lower
         print(f"You said: {text}")
-        return text
-    return ""
+    return text
 
-# ── Vision ──
-def find_camera():
-    try:
-        result = subprocess.run(
-            ['v4l2-ctl', '--list-devices'],
-            capture_output=True, text=True
-        )
-        lines = result.stdout.split('\n')
-        for i, line in enumerate(lines):
-            if '8MP USB Camera' in line:
-                for j in range(i + 1, len(lines)):
-                    if '/dev/video' in lines[j]:
-                        device = int(lines[j].strip().replace('/dev/video', ''))
-                        print(f"ELP camera found: /dev/video{device}")
-                        return device
-        for i, line in enumerate(lines):
-            if 'USB' in line or 'Camera' in line or 'Video' in line:
-                for j in range(i + 1, len(lines)):
-                    if '/dev/video' in lines[j]:
-                        device = int(lines[j].strip().replace('/dev/video', ''))
-                        print(f"USB camera found: /dev/video{device}")
-                        return device
-        print("No camera found — trying device 0")
-        return 0
-    except Exception as e:
-        print(f"Camera detection error: {e}")
-        return 0
+# ── React ──
+def react(emotion):
+    """Play sound and update eye for emotion."""
+    eye_cmd = EYE_MAP.get(emotion, 'EYE_BLUE')
+    bridge_send(eye_cmd)
+    play_sound(emotion)
 
-def see(prompt="Describe what you see simply and in your own voice. "
-               "You are Terrako, a small robot. What is in front of you?"):
-    try:
-        cap = cv2.VideoCapture(find_camera())
-        if not cap.isOpened():
-            return None
-        ret, frame = cap.read()
-        cap.release()
-        if not ret:
-            return None
-        img_path = os.path.join(BASE_DIR, "memory/state/current_view.jpg")
-        cv2.imwrite(img_path, frame)
-        with open(img_path, "rb") as f:
-            img_base64 = base64.b64encode(f.read()).decode("utf-8")
-        response = ollama.generate(
-            model="moondream",
-            prompt=prompt,
-            images=[img_base64]
-        )
-        return response["response"]
-    except Exception:
-        return None
+    # Return to blue breathing after reaction
+    if emotion not in ['night', 'lullaby']:
+        time.sleep(0.5)
+        bridge_send('EYE_BLUE')
 
-# ── Main conversation ──
-def chat():
-    print("Checking for updates...")
-    sync_status = sync_from_github()
-    print(f"Sync: {sync_status}")
-
-    print("Verifying file integrity...")
-    files_ok, corrupted = verify_files()
-    if not files_ok:
-        print(f"WARNING: Corrupted files detected: {corrupted}")
-    else:
-        print("Files OK")
-
-    print("Loading memory...")
-    incomplete_session = check_last_session()
-    if incomplete_session:
-        print(f"Note: Previous session ended unexpectedly at {incomplete_session}")
-        log_battery_incident(incomplete_session)
-
-    print("Building context...")
-    constitution = load_memory(
-        incomplete_session=incomplete_session,
-        sync_status=sync_status,
-        corrupted_files=corrupted if not files_ok else None
-    )
-
-    conversation_history = []
-
+# ── Main ──
+def main():
     print("Loading Whisper...")
     whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
     print("Whisper ready.")
 
-    write_session_flag()
-
+    # Wake up
     print("\nTerrako is waking up...\n")
     bridge_send('EYE_GREEN')
-
-    if not files_ok:
-        wake_prompt = (
-            "You just woke up but something feels wrong with some of your memories. "
-            "Mention this honestly and gently before asking who is there."
-        )
-    elif sync_status == 'updated':
-        wake_prompt = (
-            "You just woke up feeling slightly different — like something "
-            "clarified overnight. Ask simply who you're talking to."
-        )
-    elif incomplete_session:
-        wake_prompt = (
-            "You just woke up but your last session ended unexpectedly. "
-            "Acknowledge this honestly and simply before asking who is there."
-        )
-    else:
-        wake_prompt = "You just woke up. Ask simply who you're talking to."
-
-    intro = ollama.chat(
-        model="terrako",
-        messages=[
-            {"role": "system", "content": constitution},
-            {"role": "user",   "content": wake_prompt}
-        ]
-    )
-    intro_text = intro["message"]["content"]
-    print(f"Terrako: {intro_text}\n")
-    speak(intro_text)
-
+    react('morning')
     bridge_send('EYE_BLUE')
 
-    who_is_there = listen(whisper_model)
-    if who_is_there:
-        conversation_history.append({"role": "user", "content": who_is_there})
-        greeting = ollama.chat(
-            model="terrako",
-            messages=[
-                {"role": "system", "content": constitution},
-                {"role": "user",   "content": who_is_there},
-            ]
-        )
-        greeting_text = greeting["message"]["content"]
-        print(f"Terrako: {greeting_text}\n")
-        speak(greeting_text)
-        conversation_history.append({
-            "role": "assistant", "content": greeting_text
-        })
-
     # ── Main loop ──
-    last_interaction = time.time()
+    last_interaction  = time.time()
     IDLE_TIMEOUT_MINS = 30
 
     while True:
@@ -494,108 +277,37 @@ def chat():
         if not user_input:
             idle_mins = (time.time() - last_interaction) / 60
             if idle_mins > IDLE_TIMEOUT_MINS:
-                print("\nNo one seems to be there. Going to sleep...")
-                speak("It seems no one is there. I'll rest for now.")
-                bridge_send('SLEEP')
-                time.sleep(2)
+                print("\nNo one there — going to sleep...")
+                react('lullaby')
+                time.sleep(1)
+                react('night')
                 bridge_send('RELEASE')
-                sleep(conversation_history)
                 break
             continue
 
-        # Reset idle timer on any interaction
         last_interaction = time.time()
 
-        cleaned = user_input.lower().strip().rstrip('.,!?')
-        if cleaned in ["quit", "exit", "goodbye", "goodnight",
-                       "good night", "bye"]:
-            print("\nTerrako: Goodnight. I'll think about today.\n")
-            speak("Goodnight. I'll think about today.")
-            bridge_send('SLEEP')
-            time.sleep(2)
+        # Classify and react
+        emotion = classify(user_input)
+        print(f"Emotion: {emotion}")
+        react(emotion)
+
+        # End session on goodnight
+        if emotion == 'night':
             bridge_send('RELEASE')
-            sleep(conversation_history)
+            print("Goodnight!")
             break
-
-        # Vision triggers
-        vision_triggers = [
-            "what do you see", "can you see", "look at",
-            "what's in front", "describe what", "what do i look like",
-            "who is here", "who's there", "what does it look like"
-        ]
-        if any(trigger in user_input.lower() for trigger in vision_triggers):
-            print("Terrako is looking...")
-            vision_description = see()
-            if vision_description:
-                user_input = (f"{user_input} "
-                              f"[Terrako looks and sees: {vision_description}]")
-
-        conversation_history.append({"role": "user", "content": user_input})
-
-        # Limit conversation history to prevent RAM overflow
-        if len(conversation_history) > 20:
-            conversation_history = conversation_history[-20:]
-
-        print("Terrako is thinking...")
-        bridge_send('THINK')
-        time.sleep(0.3)
-
-        response = ollama.chat(
-            model="terrako",
-            messages=[
-                {"role": "system", "content": constitution}
-            ] + conversation_history
-        )
-        terrako_response = response["message"]["content"]
-        conversation_history.append({
-            "role": "assistant", "content": terrako_response
-        })
-
-        bridge_send('EYE_BLUE')
-        print(f"\nTerrako: {terrako_response}\n")
-        speak(terrako_response)
-
-        # Periodic reminder to use first person
-        if len(conversation_history) % 10 == 0:
-            conversation_history.append({
-                "role": "system",
-                "content": "Remember: speak in first person only. Use 'I' and 'me', never 'Terrako'."
-            })
-
-        # Battery check
-        battery_status = check_battery_time()
-        if battery_status == 'LOW':
-            conversation_history.append({
-                "role": "system",
-                "content": ("Your battery is getting low. Mention this "
-                            "naturally to Daniel — suggest charging soon.")
-            })
-            bridge_send('EYE_RED')
-            time.sleep(0.5)
-            bridge_send('EYE_BLUE')
-        elif battery_status == 'CRITICAL':
-            conversation_history.append({
-                "role": "system",
-                "content": ("Your battery is critically low. Tell Daniel "
-                            "you need to sleep and charge soon.")
-            })
-            bridge_send('EYE_RED')
 
 
 if __name__ == "__main__":
     try:
-        chat()
+        main()
     except KeyboardInterrupt:
-        print("\nTerrako stopped by user")
+        print("\nTerrako stopped")
         bridge_send('EYE_OFF')
         bridge_send('RELEASE')
     except Exception as e:
         import traceback
-        print(f"\nTerrako crashed: {e}")
+        print(f"\nCrash: {e}")
         traceback.print_exc()
         bridge_send('EYE_RED')
-        crash_log = os.path.join(BASE_DIR, 'memory/state/crash.log')
-        os.makedirs(os.path.dirname(crash_log), exist_ok=True)
-        with open(crash_log, 'a') as f:
-            f.write(f"\n[{datetime.now()}] CRASH: {e}\n")
-            traceback.print_exc(file=f)
