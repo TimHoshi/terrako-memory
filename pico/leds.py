@@ -49,17 +49,22 @@ def breathe():
     pixels.fill((0, 0, b))
 
 def sleep_pulse():
-    """Very slow dim pulse for sleep state — barely visible in dark room."""
+    """Very dim purple pulse for sleep state."""
     t = time.monotonic()
-    b = int(8 + 7 * math.sin(2 * math.pi * t / 6.0))
-    pixels.fill((0, 0, b))
+    b = int(15 + 10 * math.sin(2 * math.pi * t / 4.0))
+    pixels.fill((b, 0, b))  # dim purple
+    pixels.show()
 
 def sleep_fade():
-    """Slowly fade eye to off during sleep sequence."""
-    for b in range(50, 0, -2):
-        pixels.fill((0, 0, b))
+    """Fade to dim purple sleep pulse."""
+    for brightness in range(30, 0, -2):
+        pixels.fill((brightness, 0, brightness))
+        pixels.show()
         time.sleep(0.05)
-    pixels.fill((0, 0, 0))
+    # Settle into slow purple pulse
+    for _ in range(40):
+        sleep_pulse()
+        time.sleep(0.05)
 
 def think_pulse():
     """Slow white pulse while Terrako is thinking."""
