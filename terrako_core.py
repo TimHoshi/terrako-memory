@@ -252,7 +252,7 @@ def react(emotion):
 
     # Return to blue breathing after reaction
     if emotion not in ['night', 'lullaby']:
-        time.sleep(0.5)
+        time.sleep(2.0)
         bridge_send('EYE_BLUE')
 
 # ── Main ──
