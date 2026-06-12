@@ -294,8 +294,12 @@ def main():
 
         # End session on goodnight
         if emotion == 'night':
-            bridge_send('RELEASE')
+            bridge_send('SLEEP')    # eye fades out nicely
+            time.sleep(2)           # let sleep animation run
+            bridge_send('RELEASE')  # servos go limp
             print("Goodnight!")
+            time.sleep(2)           # let night sound finish
+            subprocess.run(['shutdown', '-h', 'now'])
             break
 
 
