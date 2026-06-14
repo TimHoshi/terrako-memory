@@ -278,10 +278,12 @@ def main():
             idle_mins = (time.time() - last_interaction) / 60
             if idle_mins > IDLE_TIMEOUT_MINS:
                 print("\nNo one there — going to sleep...")
+                bridge_send('SLEEP')
                 react('lullaby')
-                time.sleep(1)
-                react('night')
                 bridge_send('RELEASE')
+                print("Shutting down...")
+                time.sleep(1)
+                subprocess.run(['shutdown', '-h', 'now'])
                 break
             continue
 
