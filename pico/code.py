@@ -62,6 +62,12 @@ set_color('blue')
 
 print("Step 9 - entering main loop")
 
+# ── Color hold timer ──
+# After an EYE_* command, hold that color for this many seconds
+# before resuming the breathing animation.
+COLOR_HOLD_SECONDS = 2.5
+color_hold_until = 0
+
 # ── MAIN LOOP ──
 while True:
     cmd = serial_read()
@@ -75,38 +81,47 @@ while True:
                 stand()
         elif cmd == 'EYE_RED':
             set_color('red')
+            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
         elif cmd == 'EYE_BLUE':
             set_color('blue')
+            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
         elif cmd == 'EYE_GREEN':
             set_color('green')
+            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
         elif cmd == 'EYE_OFF':
             set_color('off')
+            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
         elif cmd == 'HAPPY':
             set_color('green')
+            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
             time.sleep(0.5)
             set_color('blue')
         elif cmd == 'THINK':
             think_start = time.monotonic()
             while True:
                 think_pulse()
-                # Check for next command
                 if supervisor.runtime.serial_bytes_available:
                     cmd = sys.stdin.readline().strip()
                     if cmd:
                         break
-                # Safety timeout after 60 seconds
                 if time.monotonic() - think_start > 60:
                     break
-                # Process the breaking command
-                if cmd == 'EYE_BLUE':
-                    set_color('blue')
-                elif cmd == 'EYE_GREEN':
-                    set_color('green')
-                elif cmd == 'EYE_OFF':
-                    set_color('off')
+                time.sleep(0.05)
+            # Process the breaking command
+            if cmd == 'EYE_BLUE':
+                set_color('blue')
+                color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            elif cmd == 'EYE_GREEN':
+                set_color('green')
+                color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            elif cmd == 'EYE_OFF':
+                set_color('off')
+                color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
         elif cmd == 'SLEEP':
             sleep_fade()
             serial_send('SLEEPING')
+            # Hold sleep state indefinitely - don't resume breathing
+            color_hold_until = time.monotonic() + 999999
         elif cmd == 'RELEASE':
             if movement_ok and any(s is not None for s in servos):
                 from movement import pca
@@ -126,6 +141,7 @@ while True:
             except Exception as e:
                 serial_send(f'ERROR {e}')
     else:
-        breathe()
+        if time.monotonic() > color_hold_until:
+            breathe()
 
     time.sleep(0.02)
