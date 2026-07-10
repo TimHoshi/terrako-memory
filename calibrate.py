@@ -1,62 +1,130 @@
+#!/usr/bin/env python3
+"""
+Terrako servo calibration tool.
+Connects to the Pico WITHOUT triggering the wake animation,
+then lets you adjust each servo interactively.
+
+Usage:
+    python3 calibrate.py
+
+Commands inside the tool:
+    <channel> <angle>   Set servo to angle       e.g.  2 95
+    all <angle>         Set all leg servos 0-7   e.g.  all 90
+    head <angle>        Set head servo 8         e.g.  head 90
+    release             Release all servos (go limp)
+    stand               All leg servos to 90
+    list                Show channel map
+    quit                Exit (releases servos first)
+"""
+
 import serial
 import time
+import os
 
-ser = serial.Serial('/dev/ttyACM0', 115200, timeout=2)
-time.sleep(2)
+CHANNEL_MAP = """
+Channel map:
+  0 = Rear Left  HIP      4 = Rear Left  KNEE
+  1 = Front Right HIP     5 = Front Left KNEE
+  2 = Front Left  HIP     6 = Rear Right KNEE
+  3 = Rear Right  HIP     7 = Front Right KNEE
+  8 = HEAD (be careful - limited range)
+"""
 
-print('Sending HELLO...')
-# Send HELLO multiple times to make sure it gets through
-for _ in range(5):
-    ser.write(b'HELLO\n')
-    time.sleep(0.5)
+def find_pico():
+    for port in ['/dev/ttyACM0', '/dev/ttyACM1', '/dev/ttyACM2']:
+        if os.path.exists(port):
+            return port
+    return None
 
-print('Listening for READY...')
-start = time.time()
-ready = False
-while time.time() - start < 30:
-    if ser.in_waiting:
-        line = ser.readline().decode().strip()
-        if line:
-            print(f'Pico: {line}')
-            if 'READY' in line:
-                ready = True
-                break
+def main():
+    port = find_pico()
+    if not port:
+        print("No Pico found!")
+        return
 
-if not ready:
-    print('Pico did not respond - check connection')
-    ser.close()
-    exit()
+    print(f"Connecting to Pico on {port}...")
+    ser = serial.Serial(port, 115200, timeout=1)
+    time.sleep(3)  # let Pico finish booting
 
-print('\nCalibration mode!')
-print('Enter: channel angle (e.g. "0 90")')
-print('Enter: save — to print final STAND array')
-print('Enter: q — to quit')
+    # CALIBRATE handshake - skips wake animation
+    ser.write(b'CALIBRATE\n')
+    time.sleep(1)
+    print("Connected in CALIBRATE mode - no wake animation.")
+    print(CHANNEL_MAP)
+    print("Type a command (or 'help'):")
 
-current = [90, 90, 90, 90, 90, 90, 90, 90, 90]
-
-while True:
-    val = input('> ').strip()
-    
-    if val.lower() == 'q':
-        break
-    elif val.lower() == 'save':
-        print(f'\nFinal STAND array:')
-        print(f'STAND = {current}')
-        print('\nCopy this into movement.py!')
-    else:
+    while True:
         try:
-            ch, ang = val.split()
-            ch = int(ch)
-            ang = int(ang)
-            current[ch] = ang
-            ser.write(f'SERVO {ch} {ang}\n'.encode())
-            time.sleep(0.1)
-            while ser.in_waiting:
-                line = ser.readline().decode().strip()
-                if line:
-                    print(f'Pico: {line}')
-            print(f'Channel {ch} → {ang}°')
-        except:
-            print('Format: channel angle (e.g. "0 90")')
+            cmd = input("> ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            cmd = 'quit'
 
-ser.close()
+        if not cmd:
+            continue
+
+        if cmd in ('quit', 'exit', 'q'):
+            print("Releasing servos and exiting...")
+            ser.write(b'RELEASE\n')
+            time.sleep(0.5)
+            ser.close()
+            break
+
+        elif cmd == 'help':
+            print(__doc__)
+
+        elif cmd == 'list':
+            print(CHANNEL_MAP)
+
+        elif cmd == 'release':
+            ser.write(b'RELEASE\n')
+            print("Servos released.")
+
+        elif cmd == 'stand':
+            for ch in range(8):
+                ser.write(f'SERVO {ch} 90\n'.encode())
+                time.sleep(0.15)
+            print("All leg servos set to 90.")
+
+        elif cmd.startswith('all '):
+            try:
+                angle = int(cmd.split()[1])
+                for ch in range(8):
+                    ser.write(f'SERVO {ch} {angle}\n'.encode())
+                    time.sleep(0.15)
+                print(f"All leg servos set to {angle}.")
+            except (ValueError, IndexError):
+                print("Usage: all <angle>   e.g.  all 90")
+
+        elif cmd.startswith('head '):
+            try:
+                angle = int(cmd.split()[1])
+                if angle < 45 or angle > 135:
+                    print("Head limited to 45-135 for safety.")
+                    continue
+                ser.write(f'SERVO 8 {angle}\n'.encode())
+                print(f"Head set to {angle}.")
+            except (ValueError, IndexError):
+                print("Usage: head <angle>   e.g.  head 90")
+
+        else:
+            # Try to parse "<channel> <angle>"
+            parts = cmd.split()
+            if len(parts) == 2:
+                try:
+                    ch = int(parts[0])
+                    angle = int(parts[1])
+                    if ch < 0 or ch > 8:
+                        print("Channel must be 0-8.")
+                        continue
+                    if ch == 8 and (angle < 45 or angle > 135):
+                        print("Head limited to 45-135 for safety.")
+                        continue
+                    ser.write(f'SERVO {ch} {angle}\n'.encode())
+                    print(f"Servo {ch} -> {angle}")
+                except ValueError:
+                    print("Unknown command. Type 'help'.")
+            else:
+                print("Unknown command. Type 'help'.")
+
+if __name__ == "__main__":
+    main()

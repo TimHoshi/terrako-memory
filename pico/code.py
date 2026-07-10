@@ -40,9 +40,13 @@ else:
 print("Step 6 - waiting for Orange Pi HELLO")
 set_color('orange')
 idle_count = 0
+calibrate_mode = False
 while True:
     cmd = serial_read()
     if cmd == 'HELLO':
+        break
+    if cmd == 'CALIBRATE':
+        calibrate_mode = True
         break
     time.sleep(0.1)
     idle_count += 1
@@ -51,7 +55,7 @@ while True:
         idle_count = 0
 
 print("Step 7 - running wakeup")
-if movement_ok:
+if movement_ok and not calibrate_mode:
     wake_up()
 else:
     print("Step 7 - skipping wakeup, movement not available")
