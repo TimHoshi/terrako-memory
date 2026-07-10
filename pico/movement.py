@@ -45,10 +45,20 @@ def _set(channel, angle):
         servos[channel].angle = max(0, min(180, angle))
 
 def stand():
+    """Stand up in stages - diagonal pairs, ramped, to limit current draw."""
     if not any(s is not None for s in servos):
         return
-    for i, angle in enumerate(STAND):
-        _set(i, angle)
+
+    # Pair 1: Front Left + Rear Right (hips then knees, ramped)
+    for ch in (FL_HIP, RR_HIP, FL_KNEE, RR_KNEE):
+        slow_set(ch, STAND[ch], steps=15, delay=0.02)
+
+    time.sleep(0.3)  # let current settle
+
+    # Pair 2: Front Right + Rear Left
+    for ch in (FR_HIP, RL_HIP, FR_KNEE, RL_KNEE):
+        slow_set(ch, STAND[ch], steps=15, delay=0.02)
+
     time.sleep(0.3)
 
 def slow_set(channel, target, steps=20, delay=0.02):
