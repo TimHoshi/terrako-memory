@@ -45,21 +45,30 @@ def _set(channel, angle):
         servos[channel].angle = max(0, min(180, angle))
 
 def stand():
-    """Stand up one leg at a time - minimal current draw."""
+    """Crouch-first staged stand - all servos share load throughout."""
     if not any(s is not None for s in servos):
         return
 
-    legs = [
-        (FL_HIP, FL_KNEE),   # front left
-        (RR_HIP, RR_KNEE),   # rear right
-        (FR_HIP, FR_KNEE),   # front right
-        (RL_HIP, RL_KNEE),   # rear left
-    ]
+    CROUCH_OFFSET = 25  # knees bent 25 degrees from stand
 
-    for hip, knee in legs:
-        slow_set(hip,  STAND[hip],  steps=20, delay=0.02)
-        slow_set(knee, STAND[knee], steps=20, delay=0.02)
-        time.sleep(0.4)   # rail recovery between legs
+    # Stage 1: everything energizes in a low crouch - minimal torque needed
+    for i in range(8):
+        _set(i, STAND[i])
+    _set(FL_KNEE, STAND[FL_KNEE] + CROUCH_OFFSET)
+    _set(FR_KNEE, STAND[FR_KNEE] + CROUCH_OFFSET)
+    _set(RL_KNEE, STAND[RL_KNEE] - CROUCH_OFFSET)
+    _set(RR_KNEE, STAND[RR_KNEE] - CROUCH_OFFSET)
+    time.sleep(0.6)
+
+    # Stage 2: all four knees straighten together SLOWLY - all legs share the lift
+    steps = 30
+    for s in range(steps):
+        f = (s + 1) / steps
+        _set(FL_KNEE, STAND[FL_KNEE] + CROUCH_OFFSET * (1 - f))
+        _set(FR_KNEE, STAND[FR_KNEE] + CROUCH_OFFSET * (1 - f))
+        _set(RL_KNEE, STAND[RL_KNEE] - CROUCH_OFFSET * (1 - f))
+        _set(RR_KNEE, STAND[RR_KNEE] - CROUCH_OFFSET * (1 - f))
+        time.sleep(0.04)
 
 def slow_set(channel, target, steps=20, delay=0.02):
     if servos[channel] is None:
