@@ -31,7 +31,7 @@ else:
     servos = [None] * 9
 
 # ── Calibrated standing angles ──
-STAND = [100, 60, 50, 110, 60, 100, 115, 80, 90]
+STAND = [90, 90, 90, 90, 90, 90, 90, 90, 90]
 
 # ── Servo channel assignments ──
 FL_HIP  = 2;  FL_KNEE = 5
