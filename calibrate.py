@@ -83,7 +83,7 @@ def main():
             for ch in range(8):
                 ser.write(f'SERVO {ch} 90\n'.encode())
                 time.sleep(0.15)
-            print("All leg servos set to 90.")
+            print("leg servos set to 100, 60, 50, 110, 60, 100, 115, 80, 90")
 
         elif cmd.startswith('all '):
             try:
