@@ -1,3 +1,10 @@
+# Low-level ring helpers for the 8x NeoPixel on GP28.
+#
+# `pixels` is the single shared ring object; presence.py imports it and drives
+# the motion. Leave auto_write at its default (True) or presence.tick() won't
+# reach the LEDs. The functions below are the legacy animations kept as a
+# fallback for when presence.py is absent.
+
 import board
 import neopixel
 import time

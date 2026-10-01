@@ -5,8 +5,18 @@ import supervisor
 print("Step 1 - basic imports done")
 
 from leds import test_pixels, startup_sequence
-from leds import set_color, breathe, think_pulse, sleep_fade
 print("Step 2 - leds imported")
+
+# Presence engine: one ring, one language. Falls back to plain blue breathing
+# if presence.py is missing, so a half-copied card still boots.
+try:
+    import presence
+    presence_ok = True
+    print("Step 2b - presence imported")
+except Exception as e:
+    presence_ok = False
+    from leds import set_color, breathe
+    print(f"Step 2b - presence FAILED: {e}")
 
 try:
     from movement import wake_up, stand, servos
@@ -19,9 +29,11 @@ except Exception as e:
 
 print("Step 4 - sensor skipped")
 
-# ── Serial helpers ──
+
+# -- Serial helpers --
 def serial_send(msg):
     sys.stdout.write(msg + '\n')
+
 
 def serial_read():
     if supervisor.runtime.serial_bytes_available:
@@ -29,7 +41,27 @@ def serial_read():
         return line if line else None
     return None
 
-# ── Boot sequence ──
+
+def show(name, timed=None):
+    """Set a presence state, legacy fallback if the engine is missing."""
+    if not presence_ok:
+        legacy = {'idle': 'blue', 'talking': 'green', 'alert': 'red',
+                  'working': 'red', 'asleep': 'off', 'happy': 'green'}
+        set_color(legacy.get(name, 'blue'))
+        return True
+    if timed:
+        return presence.set_state_timed(name, timed)
+    return presence.set_state(name)
+
+
+def animate():
+    if presence_ok:
+        presence.tick()
+    else:
+        breathe()
+
+
+# -- Boot sequence --
 print("Step 5 - testing pixels")
 pixel_ok = test_pixels()
 if not pixel_ok:
@@ -38,7 +70,7 @@ else:
     startup_sequence()
 
 print("Step 6 - waiting for Orange Pi HELLO")
-set_color('orange')
+show('working')
 idle_count = 0
 calibrate_mode = False
 while True:
@@ -50,6 +82,7 @@ while True:
         break
     time.sleep(0.1)
     idle_count += 1
+    animate()
     if idle_count >= 300:  # every 30 seconds
         serial_send('WAITING')
         idle_count = 0
@@ -60,19 +93,14 @@ if movement_ok and not calibrate_mode:
 else:
     print("Step 7 - skipping wakeup, movement not available")
 
+# Legs came back under their own power; the ring says I'm here.
+show('here')
+
 print("Step 8 - sending READY")
 serial_send('READY')
-set_color('blue')
 
 print("Step 9 - entering main loop")
 
-# ── Color hold timer ──
-# After an EYE_* command, hold that color for this many seconds
-# before resuming the breathing animation.
-COLOR_HOLD_SECONDS = 2.5
-color_hold_until = 0
-
-# ── MAIN LOOP ──
 while True:
     cmd = serial_read()
 
@@ -80,30 +108,55 @@ while True:
         if cmd == 'STOP':
             if movement_ok:
                 stand()
+            show('asleep')
         elif cmd == 'STAND':
             if movement_ok:
                 stand()
+            show('here')
+        # --- presence states (new) ---
+        elif cmd.startswith('STATE'):
+            try:
+                name = cmd.split(None, 1)[1]
+                serial_send(f'OK STATE {name}' if show(name) else f'ERROR unknown state {name}')
+            except Exception as e:
+                serial_send(f'ERROR {e}')
+        elif cmd.startswith('BRIGHT'):
+            try:
+                pct = int(cmd.split()[1])
+                if presence_ok:
+                    presence.set_brightness(pct)
+                serial_send(f'OK BRIGHT {pct}')
+            except Exception as e:
+                serial_send(f'ERROR {e}')
+        elif cmd.startswith('EYE '):
+            # EYE <r> <g> <b> - raw, held steady until the next STATE
+            try:
+                _, r, g, b = cmd.split()
+                if presence_ok:
+                    presence.set_rgb(int(r), int(g), int(b))
+                serial_send(f'OK EYE {r} {g} {b}')
+            except Exception as e:
+                serial_send(f'ERROR {e}')
+        # --- legacy EYE_* names, mapped to states ---
         elif cmd == 'EYE_RED':
-            set_color('red')
-            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            show('alert')
         elif cmd == 'EYE_BLUE':
-            set_color('blue')
-            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            show('idle')
         elif cmd == 'EYE_GREEN':
-            set_color('green')
-            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            show('talking')
         elif cmd == 'EYE_OFF':
-            set_color('off')
-            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            show('asleep')
         elif cmd == 'HAPPY':
-            set_color('green')
-            color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
-            time.sleep(0.5)
-            set_color('blue')
+            show('happy', timed=2.5)
         elif cmd == 'THINK':
             think_start = time.monotonic()
+            show('working')
             while True:
-                think_pulse()
+                if presence_ok:
+                    presence.tick()
+                else:
+                    from leds import think_pulse
+                    think_pulse()
                 if supervisor.runtime.serial_bytes_available:
                     cmd = sys.stdin.readline().strip()
                     if cmd:
@@ -111,21 +164,10 @@ while True:
                 if time.monotonic() - think_start > 60:
                     break
                 time.sleep(0.05)
-            # Process the breaking command
-            if cmd == 'EYE_BLUE':
-                set_color('blue')
-                color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
-            elif cmd == 'EYE_GREEN':
-                set_color('green')
-                color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
-            elif cmd == 'EYE_OFF':
-                set_color('off')
-                color_hold_until = time.monotonic() + COLOR_HOLD_SECONDS
+            show('idle')
         elif cmd == 'SLEEP':
-            sleep_fade()
+            show('asleep')
             serial_send('SLEEPING')
-            # Hold sleep state indefinitely - don't resume breathing
-            color_hold_until = time.monotonic() + 999999
         elif cmd == 'RELEASE':
             if movement_ok and any(s is not None for s in servos):
                 from movement import pca
@@ -145,7 +187,4 @@ while True:
             except Exception as e:
                 serial_send(f'ERROR {e}')
     else:
-        if time.monotonic() > color_hold_until:
-            breathe()
-
-    time.sleep(0.02)
+        animate()
