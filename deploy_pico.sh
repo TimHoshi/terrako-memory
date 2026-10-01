@@ -22,11 +22,25 @@ if [ -z "$PICO_PORT" ]; then echo "Pico not found! Is it connected?"; exit 1; fi
 
 # --- clean stop of the listener (added by Akari, Oct 1 2026) ----------------
 # The Guardian listener holds the Pico serial port, so flashing while it runs
-# used to fail or fight it. Stop it the right way: ask its own /shutdown first
-# (that sends RELEASE so the servos go slack, then closes the port), and fall
-# back to pkill only if the door is unreachable. This is the handoff, so it is
-# no longer a thing to remember.
-if pgrep -f akari_listener_v0.py >/dev/null 2>&1; then
+# used to fail or fight it. Two ways it can be running now:
+#   (a) as the systemd unit akari-listener.service (survives crashes + boots);
+#   (b) hand-started from a terminal.
+# Either way: stop it, flash, and (for (a)) start it again at the end, so the
+# ring gets its HELLO back without anyone remembering to do it.
+SERVICE=0
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files akari-listener.service >/dev/null 2>&1 \
+   && systemctl cat akari-listener.service >/dev/null 2>&1; then
+  SERVICE=1
+  echo "stopping akari-listener.service (it holds the Pico port)..."
+  systemctl stop akari-listener.service || true
+  # make sure it is really gone before we take the port
+  for i in $(seq 1 10); do
+    pgrep -f akari_listener_v0.py >/dev/null 2>&1 || break
+    sleep 1
+  done
+fi
+
+if [ "$SERVICE" = "0" ] && pgrep -f akari_listener_v0.py >/dev/null 2>&1; then
   echo "stopping akari-listener (it holds the Pico port)..."
   LISTEN_TOKEN="${AKARI_TOKEN:-}"
   LISTEN_PORT="${AKARI_PORT:-}"
@@ -83,4 +97,9 @@ done
 
 echo "Pico updated successfully!"
 echo "Pico will auto-reload"
-echo "Reminder: start the listener again when you want the door live"
+if [ "$SERVICE" = "1" ]; then
+  echo "starting akari-listener.service again (it will HELLO the fresh Pico)..."
+  systemctl start akari-listener.service || true
+else
+  echo "Reminder: start the listener again when you want the door live"
+fi
