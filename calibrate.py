@@ -36,6 +36,20 @@ def find_pico():
             return port
     return None
 
+
+def drain(ser):
+    """Print anything the Pico said back. If NOTHING ever prints here, the
+    firmware is not running (the board is parked at the CircuitPython REPL)
+    and your SERVO commands are going nowhere."""
+    time.sleep(0.08)
+    got = False
+    while ser.in_waiting:
+        line = ser.readline().decode(errors='replace').strip()
+        if line:
+            print(f"Pico: {line}")
+            got = True
+    return got
+
 def main():
     port = find_pico()
     if not port:
@@ -49,6 +63,9 @@ def main():
     # CALIBRATE handshake - skips wake animation
     ser.write(b'CALIBRATE\n')
     time.sleep(1)
+    if not drain(ser):
+        print("No reply from the board. If it stays silent, code.py is not")
+        print("running (press RESET on the Pico and watch for Step 1..Step 6).")
     print("Connected in CALIBRATE mode - no wake animation.")
     print(CHANNEL_MAP)
     print("Type a command (or 'help'):")
@@ -77,13 +94,15 @@ def main():
 
         elif cmd == 'release':
             ser.write(b'RELEASE\n')
+            drain(ser)
             print("Servos released.")
 
         elif cmd == 'stand':
             for ch in range(8):
                 ser.write(f'SERVO {ch} 90\n'.encode())
                 time.sleep(0.15)
-            print("leg servos set to 100, 60, 50, 110, 60, 100, 115, 80, 90")
+            drain(ser)
+            print("All leg servos (0-7) set to 90.")
 
         elif cmd.startswith('all '):
             try:
@@ -91,6 +110,7 @@ def main():
                 for ch in range(8):
                     ser.write(f'SERVO {ch} {angle}\n'.encode())
                     time.sleep(0.15)
+                drain(ser)
                 print(f"All leg servos set to {angle}.")
             except (ValueError, IndexError):
                 print("Usage: all <angle>   e.g.  all 90")
@@ -102,6 +122,7 @@ def main():
                     print("Head limited to 45-135 for safety.")
                     continue
                 ser.write(f'SERVO 8 {angle}\n'.encode())
+                drain(ser)
                 print(f"Head set to {angle}.")
             except (ValueError, IndexError):
                 print("Usage: head <angle>   e.g.  head 90")
@@ -120,6 +141,7 @@ def main():
                         print("Head limited to 45-135 for safety.")
                         continue
                     ser.write(f'SERVO {ch} {angle}\n'.encode())
+                    drain(ser)
                     print(f"Servo {ch} -> {angle}")
                 except ValueError:
                     print("Unknown command. Type 'help'.")
