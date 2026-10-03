@@ -95,12 +95,37 @@ print('Pico interrupted, sitting at REPL')
 
 sleep 1
 
-echo "Deploying to Pico ($PICODIR)..."
+# --- pick a flasher ---------------------------------------------------------
+# mpremote is built for CircuitPython and handles the raw REPL far more
+# reliably than ampy. But `pip3 install --user mpremote` drops the binary in
+# ~/.local/bin, which is NOT on PATH in a non-login shell -- so `command -v`
+# misses it, we fall through to ampy, and ampy wedges on CircuitPython 10.x.
+# Resolve it explicitly, including the `python3 -m mpremote` module path.
+MPREMOTE=""
 if command -v mpremote >/dev/null 2>&1; then
-  # mpremote is built for CircuitPython and handles the raw REPL far more
-  # reliably than ampy. Preferred when present.
+  MPREMOTE="mpremote"
+else
+  for cand in "$HOME/.local/bin/mpremote" \
+              "/root/.local/bin/mpremote" \
+              "/usr/local/bin/mpremote" \
+              /home/*/.local/bin/mpremote; do
+    if [ -x "$cand" ]; then MPREMOTE="$cand"; break; fi
+  done
+fi
+if [ -z "$MPREMOTE" ]; then
+  for py in python3 python; do
+    if command -v "$py" >/dev/null 2>&1 && "$py" -c 'import mpremote' >/dev/null 2>&1; then
+      MPREMOTE="$py -m mpremote"
+      break
+    fi
+  done
+fi
+
+echo "Deploying to Pico ($PICODIR)..."
+if [ -n "$MPREMOTE" ]; then
+  echo "flasher: $MPREMOTE"
   for f in $FILES; do
-    mpremote connect "$PICO_PORT" cp "$PICODIR/$f" ":$f" || { echo "failed: $f"; exit 1; }
+    $MPREMOTE connect "$PICO_PORT" cp "$PICODIR/$f" ":$f" || { echo "failed: $f"; exit 1; }
   done
 elif command -v ampy >/dev/null 2>&1; then
   for f in $FILES; do
