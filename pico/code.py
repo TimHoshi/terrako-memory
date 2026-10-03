@@ -89,7 +89,12 @@ while True:
 
 print("Step 7 - running wakeup")
 if movement_ok and not calibrate_mode:
-    wake_up()
+    try:
+        wake_up()
+    except Exception as e:
+        # Non-fatal: a dead servo bus must not stop the ring coming up.
+        print(f"Step 7 - wakeup fault (non-fatal): {e}")
+        serial_send('WARNING_WAKEUP')
 else:
     print("Step 7 - skipping wakeup, movement not available")
 
@@ -107,11 +112,17 @@ while True:
     if cmd:
         if cmd == 'STOP':
             if movement_ok:
-                stand()
+                try:
+                    stand()
+                except Exception as e:
+                    print(f"STAND fault (non-fatal): {e}")
             show('asleep')
         elif cmd == 'STAND':
             if movement_ok:
-                stand()
+                try:
+                    stand()
+                except Exception as e:
+                    print(f"STAND fault (non-fatal): {e}")
             show('here')
         # --- presence states (new) ---
         elif cmd.startswith('STATE'):
