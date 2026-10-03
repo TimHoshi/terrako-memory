@@ -85,7 +85,9 @@ done
 python3 -c "
 import serial, time
 ser = serial.Serial('$PICO_PORT', 115200, timeout=1)
-ser.write(b'\x03\x03')
+ser.write(b'\x02')        # Ctrl-B: leave raw REPL if a flasher left us stuck there
+time.sleep(0.3)
+ser.write(b'\x03\x03')   # Ctrl-C twice: interrupt running code, land at friendly REPL
 time.sleep(1.0)
 ser.close()
 print('Pico interrupted, sitting at REPL')
