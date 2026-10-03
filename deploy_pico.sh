@@ -76,27 +76,52 @@ for f in $FILES; do
   if [ ! -f "$PICODIR/$f" ]; then echo "missing $PICODIR/$f"; exit 1; fi
 done
 
-# Stop CircuitPython so ampy can write
+# --- get the board to the REPL, and KEEP it there while we flash ------------
+# Ctrl-C twice interrupts whatever code.py is doing (it loops waiting for a
+# HELLO, so it never yields the REPL on its own).
+# We deliberately do NOT send Ctrl-D here. Ctrl-D restarts code.py, and then
+# the REPL never comes back to the flasher -- which is exactly why the first
+# put (boot.py) used to just hang forever. Reload at the END instead.
 python3 -c "
 import serial, time
 ser = serial.Serial('$PICO_PORT', 115200, timeout=1)
 ser.write(b'\x03\x03')
-time.sleep(0.5)
-ser.write(b'\x04')
-time.sleep(3)
+time.sleep(1.0)
 ser.close()
-print('Pico rebooted')
+print('Pico interrupted, sitting at REPL')
 "
 
-sleep 2
+sleep 1
 
 echo "Deploying to Pico ($PICODIR)..."
-for f in $FILES; do
-  ampy --port "$PICO_PORT" put "$PICODIR/$f" "/$f" || { echo "failed: $f"; exit 1; }
-done
+if command -v mpremote >/dev/null 2>&1; then
+  # mpremote is built for CircuitPython and handles the raw REPL far more
+  # reliably than ampy. Preferred when present.
+  for f in $FILES; do
+    mpremote connect "$PICO_PORT" cp "$PICODIR/$f" ":$f" || { echo "failed: $f"; exit 1; }
+  done
+elif command -v ampy >/dev/null 2>&1; then
+  for f in $FILES; do
+    # timeout so a wedged REPL fails loudly instead of hanging forever
+    timeout 60 ampy --port "$PICO_PORT" put "$PICODIR/$f" "/$f" \
+      || { echo "failed: $f (ampy hung or errored)"; exit 1; }
+  done
+else
+  echo "no flasher found: pip3 install --user mpremote  (preferred), or ampy"
+  exit 1
+fi
 
 echo "Pico updated successfully!"
-echo "Pico will auto-reload"
+
+# One soft reload so boot.py + code.py run and the board reaches 'waiting for HELLO'.
+python3 -c "
+import serial, time
+ser = serial.Serial('$PICO_PORT', 115200, timeout=1)
+ser.write(b'\x04')
+time.sleep(0.5)
+ser.close()
+print('Pico soft-reloaded into the new firmware')
+"
 if [ "$SERVICE" = "1" ]; then
   echo "starting akari-listener.service again (it will HELLO the fresh Pico)..."
   systemctl start akari-listener.service || true
